@@ -18,54 +18,154 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Download Storyline source from Google Drive
+      - name: Download Storyline assets
         shell: bash
         run: |
-          python -m pip install --upgrade pip gdown
-          rm -rf story-download app/src/main/assets/www
-          mkdir -p story-download app/src/main/assets/www
+          set -euo pipefail
+          rm -rf app/src/main/assets/www
+          mkdir -p app/src/main/assets/www
+          cat > /tmp/storyline-files.txt <<'EOF'
+          html5/data/css/output.min.css|1_44_DUKL1Xc7TIBLoTW6z73-WOBVtjAI
+          html5/data/js/5dLu2VEVQEp.js|1rLmyNeaRZe6JSmFgBb2wyipbHgTBC2ix
+          html5/data/js/5eIFhr21ynY.js|1TMT-N0rTSGEL9kOm1n83B3CSVdXvAIkd
+          html5/data/js/5hDHcLv8KIf.js|1Gn02IFlfDz3Pwu2ZGZdjCngABwY1b2ry
+          html5/data/js/5hshhWIQRVh.js|1yJyhOPf0HPJL2Qis5bIIb3w_hPMEIbMw
+          html5/data/js/5leV9gephfI.js|1fMOAmkuo8xPGeHHeIEOkOsvqvEYnHHF8
+          html5/data/js/5mQmENQLhSa.js|1YBEqmV5jgiq8__OO-_xOAvSOTw1YABwp
+          html5/data/js/5ngBzE2X0aO.js|1kPuRgqis2T2_fRvW9EgqiONwwTbglx-H
+          html5/data/js/5oUSc7XvgFo.js|1Nq44YDlu1F0Pkv4rLozgDYyUXa9rmdQV
+          html5/data/js/5v23qTkDZzX.js|1RuDURMvmgumDU7RUCPSabrgWwMg1d9Ek
+          html5/data/js/5vot2dwYbXU.js|1rPT1zkmS55u3wCqsMrAQoezLGI7_H8b2
+          html5/data/js/5WpGVCxgbSh.js|1fK1Tz1gC29-A_AB23bPu8dOREK4tK3eI
+          html5/data/js/5yrhe7EQ6VP.js|1wf9WXHOru0AS3vr5SztCRsesD6wEF7jw
+          html5/data/js/5ZIOzNPmq0P.js|1mfdPsYNxelO4Z12DiTmhPDrmwq1nAnOB
+          html5/data/js/5zKgCQt6zIX.js|1awG-XL35Bt0yzIbW8WdU505hwAi_8Kwy
+          html5/data/js/605VG9ZzbWm.js|1KNK8o1nL9uUehPAKPnNoHbNUMcSqX5kF
+          html5/data/js/62fiRJOS9ka.js|1FJr99jmBOxNokPut4J6mLjSv_L3e5j50
+          html5/data/js/66oMoJOhKLv.js|1t7tBN71UMx5VdFf179NByvemKye6MaYA
+          html5/data/js/68D8O9VQ332.js|1N-oCftKrpz9CRMZ6vxDbMLAdU0fu49V3
+          html5/data/js/68E2YIFaNwA.js|1vmOfopVcJaxJDs9h-r_T39fpir7OVJJb
+          html5/data/js/68zgFrsn70l.js|1DZxvVAiS4NA1ECHXU6LVgkJqsD2cj0mr
+          html5/data/js/69XPxm1Fes9.js|1oUU0SYzSRC_ImvulAjEw5_UXAzdC66VO
+          html5/data/js/6B21wljjDTS.js|1iVQINeS3MvHLBAzlZhXoyZTmnsaNXX_e
+          html5/data/js/6c0508BAVug.js|1Ofk9PtcUNoQR56NyW5ZreBZ6Xkg4Fi_2
+          html5/data/js/6ebnWQldkJP.js|13BtkhAFXD9H-OGDdvdAfJZDrZydMk5ct
+          html5/data/js/6fuHQT7RbCt.js|1VBN6fS-JZG_7ntpmbMTpRzHvnqd93pcm
+          html5/data/js/6GPKxPJfBA2.js|1hMQ-eIm7LXPXT9SenyE9_juKLSPgqqer
+          html5/data/js/6HzkosSFNc3.js|1Gmn6vvoyiM1sZyOXSbH5UeMMrh-t63st
+          html5/data/js/6kclUakC36L.js|1pPneyVYaeEFjTbfqFGRokm5h0KERrVGW
+          html5/data/js/6Lm9f5YKRuD.js|1Z15gY42lEW6RIx3aMMpHVZj6YPoVs2xG
+          html5/data/js/6oCcYi2m3OV.js|1Cz3pS2U3lzoTMYFe-bDsoVPV9DfZbDo-
+          html5/data/js/6OEM0KlD7H8.js|16WNgHzD6abq5vCd-_i97bZ2ilTKkVMSj
+          html5/data/js/6qJh5jGnA3c.js|1fdaqd3CRNpZPeyFGDJseo1C05T4zPAJ5
+          html5/data/js/6QtYyXI1dQU.js|1JutKsersOBE3ABRhxIno6xByeDe5M-ZW
+          html5/data/js/6V5xQvQob1o.js|1TYIzqcSFtaUF0SjMaw7nX5PWfJTCJG42
+          html5/data/js/6Xiku44bf7z.js|1SHZzhABEaq6N-y7ENoCLBN2gJyJQ7MIE
+          html5/data/js/6XKlJlcP4Pw.js|1JmWGsvH55r0Y5ezPeZrB0GpjZ_F_HPx-
+          html5/data/js/6XPmijQ7zoA.js|17eTnetgfa-LPMRbr3ZUq8QCAMelqmkC8
+          html5/data/js/6YdfZzYY76L.js|14hsf0hfoK9MilyQncXagZyRS3KfFGfId
+          html5/data/js/data.js|1KukXmXSeP0v41UGYRrQfNVcHYJmscgBQ
+          html5/data/js/frame.js|1gsiBXlHjxZLRZrhc2BFn9ytk_x6iHb8c
+          html5/data/js/paths.js|1w6_iIwLnnIEEGnMmZNrvzYcCPTW2zhVs
+          html5/lib/scripts/bootstrapper.min.js|1dYdtxOJq8UDOM7dl4hSME-aTKU9-40Y4
+          html5/lib/scripts/frame.desktop.min.js|1VxbL1f3QguRrvQfsRsImIV0tAKfbt3bP
+          html5/lib/scripts/frame.mobile.min.js|1Ax5-qynBPyMw5wEDu7ysHS8xe_kuNwpc
+          html5/lib/scripts/slides.min.js|1bXnYjW6-Ix-_ZXMCs4lK4e6SejqyxlL6
+          html5/lib/stylesheets/mobile-fonts/open-sans-bold.woff|1d0y5AZH-TrK--ZcpNFRrsozlVwgX8pgT
+          html5/lib/stylesheets/mobile-fonts/open-sans-light.woff|16IdN9jr2tphFyH-pRR46gRLlIzBeapG7
+          html5/lib/stylesheets/mobile-fonts/open-sans-regular.woff|1RBiHY-QeHjtUIqgzTxkBu9kr6QsxdvbK
+          html5/lib/stylesheets/desktop.min.css|1JpasGZ-xsKFOFPE6bM3DvGFKVcDtls7w
+          html5/lib/stylesheets/mobile.min.css|1pM2zuW5ODgxRjZxyePgpyd--5f5txlih
+          mobile/5amkKWp0A3x.png|1uOom_N5zA4mXZd7Oc6mluWRUkaenwx3h
+          mobile/5eZgS8R1WAO.png|1RraZZryqvSLLc9LkqlGb1OFUNegdhQey
+          mobile/5fjSlrBZLcB.png|1K_Y3aTUyWRvB5pMlJx83KuJVjcUm149V
+          mobile/5gDYUb97Joc.png|1nM6es1Bm1Y6IBU_ZLSZwVh9sah5SoNLa
+          mobile/5h2ZwolOFIK.png|18jDNbnaegAI1j4txMTq8QZOUa1kV5LPC
+          mobile/5hcw65BG3hW.png|1Aoe-MwkqeYhosHj4QUFJGbqGdvZiEO3p
+          mobile/5ikkTaIJLQb.png|1gz9b1mL1618xha9awdY0_gU1Xne1d161
+          mobile/5k4BWqKdoKA.png|1hvSI_atrmHapJ9gv6_IYsFMjRVn5bmMG
+          mobile/5ogHveY9Sfd.png|1e-z7p4U-YYSxUvK4TPrEGhq6EOkaakWN
+          mobile/5p05urrzJ2x.png|1xYmeK1hZJQHrkMFLscLBDGQH79encDRd
+          mobile/5pQP1rvHLY3.png|1dXChWh-jx2_tt2R3YZZJLVGc0AkBbrs7
+          mobile/5q3d6cJxmeh.png|12nIbIeGiS2anozTH4exjO9reH2ocG1M_
+          mobile/5qhnB55JDuZ.png|1KYxChOeql6nYoh6rKCQzI-camKjwq0kV
+          mobile/5sameP4KktA.png|16jzhchHZmBHn5X7TH_vn6PG94lWxvWTY
+          mobile/5v8lLcer2kJ.png|1oIA2VIw2JIyR6Q83ExCb-luI6QCQ_6rA
+          mobile/5vot15QM0sO.png|1c-qZqGA89MKwIPfrMcHMSD7nGpJ2iAH1
+          mobile/5vzSyjC5rWv.png|1N9i4u-EmTZied0_xKwUQmvzloT_xGqU3
+          mobile/5y5LNr86ezI.png|1Eo2EDoT-BbnDc4osdtGyGXoSI9One5ZO
+          mobile/5Zm5MMvkSMr.png|1v6YnYYYmDQZHoNcrmEQo9PVRyBFtRAjh
+          mobile/5Zq0ac8FzZT.png|1h5MEAtJayGwDnuJKLOquoK4HTIEYLGGm
+          mobile/60bBAfe6frt.png|1ADKEWPR1O4TiNyQJZXQOvAhwO2A1J-7c
+          mobile/6323oc3FPwM.png|17b0p1CYyhCUGVguMejoWWVhiopTh0KFf
+          mobile/64T0Bj5hXlT.png|1ETt9iDc6eLIvhSCGojXPdZpLaLffsEES
+          mobile/64ZhKjazHJ4.png|1NRGnGIuLO3xFMI1eDppzZgWCJGUMvKfh
+          mobile/68lYP7tGaPB.png|1bosWj3EfJBxjdaU_W-DgEot2iNeQW99b
+          mobile/6aIbOuiZOX2.png|1Genw7PpDWt2uMUhIZdlbMvEcZ1fO-U8U
+          mobile/6BGjSr11Yl8.png|1d-89BvS5rYoZjie_71rZz_hMc65vMLTb
+          mobile/6DLq0Q3FXgA.png|10Ldr_V-BLBGvlk6arXFvbpUdgpZz7Lig
+          mobile/6DXP9ytUyfk.png|1j6KzR9bvd1qbW_4o0LYIdczF0TVnhvuu
+          mobile/6EdU8WzJmET.png|1DEN108O86jJmG4dKXGK_XsO5fatw9cqE
+          mobile/6eMob5EnFnm.png|1rfSGz5e4Gp565uFNlwnNqeGz3iszbCfR
+          mobile/6fTsqhcbvNm.png|1VFmOJ8AEyf8UHiQvQsuvT0FfI8e8bVu1
+          mobile/6G9CUPYjR4x.png|1mQkumXINQKyKuFNJjJAHwrzA3X-Tw9aa
+          mobile/6GcaSJr0w5S.png|1ZwJNk08zt5-Yh6l-gHvOcajCToq1Nj12
+          mobile/6gJ0bGFHp83.png|1OoL6O8xNicVyrveiShys4xDhihdsfhdS
+          mobile/6hs7AP7DSkp.png|1iVgmS2NqlafhlgVuJ6INdg6nYMqvucwo
+          mobile/6i8c7TYjxqf.png|1MYNWBwEvP1HEwUe8tZ6EyK3bYT2bcgxY
+          mobile/6ImnuidlUcS.png|1ZVha6ByuXpC9diDkVyWGfKQSL6_x07uY
+          mobile/6iNACmPFElI.png|1mSWXUR0IvJVn7-0NDdrV_Uj4EdMWUAPg
+          mobile/6IqLXDoPNwT.png|1y5Liqe8H3KK_J1ae3tip8rSqMfvYf-uX
+          mobile/6lDFmoeNE3S.png|1Te-V9qxKYsTn96fdHRmJgz60mPF2Obxj
+          mobile/6lV6ofn2ss9.png|1PqbU_QtI9eg4S3a_g4I19qTKs4JKj8q8
+          mobile/6N1BNuAcMCy.png|1qR7dEgBeq0JJAxEIiV0D8FyJMuVChA6N
+          mobile/6oaNFmK1vTn.png|1wxwHPS4jIRM5mRn3JUr4Vmd7U5sQz5ec
+          mobile/6og8AVUbwy7.png|1VkNhY9BsjWqYaspFCqKmfuYafmi41XYB
+          mobile/6r4hzLQ8f9a.png|1YF0Z9TNrjr6DINU94aaVF-AqUkK3jD5M
+          mobile/6T1cJjT9E9B.png|1mRogC97K2zACo7If-gP8WB-W5x92g-Nw
+          mobile/6Y4Sb9HbxkL.png|1-CueNnMSTRqCzzOCsxWkme5KIl4voFjk
+          mobile/6ZIKEMnqMkA.png|1XISyLV6JyONXPek2UddJIjq3Yq4LJPYR
+          mobile/poster_5mA35a7NBXD_video_5ZKA5I6IQ9M_22_48_256x144.jpg|1J4wuBIkMn9Q05J-IwxyF344ijf9RXjcy
+          story_content/5n1ZBcmuWT2_44100_48_0.mp3|1u3qi88RyI8_l50PUnquSLXAA0DhEbhO0
+          story_content/5sM8vXqJjpc_44100_48_0.mp3|1IrbR0fv5qkdsq3yTgBqYbqeVAxN1yvYR
+          story_content/frame.xml|1MMAGjEtGNK7jWy7pCLFSWOjx5Z8-vN47
+          story_content/thumbnail.jpg|1_89HFxhOIDqBbiJMqTXel5OfwYLpIKPi
+          story_content/user.js|1dcQ7iT41gM_sx1x7lhEeqtup9Cl7yeOD
+          story_content/video_5ZKA5I6IQ9M_22_48_256x144.mp4|1v0VxKNioFscQBA00NGj8VAc_T96terUf
+          analytics-frame.html|1U6AZWapI9u23-GvcbhYz8wQ6L4sv_gtQ
+          index.html|1yWRJWEe3l4tGwaWwm-R3mjPZoDI4EKRU
+          meta.xml|1sFdg1bvNtRlZs82jeK55fEiijQ-aLXNf
+          story.html|1HWGzPbjnmHdo2kSxTjUo0BBObpnI_OTh
+          EOF
 
-          DOWNLOAD_OK=0
-          for attempt in 1 2 3 4 5; do
-            echo "Storyline download attempt $attempt/5"
-            if gdown --folder --continue 'https://drive.google.com/drive/folders/1FKjB-pHJzMMun4VvYgO-XwKdghfAvaYD' -O story-download; then
-              DOWNLOAD_OK=1
-              break
-            fi
-            echo "Google Drive throttled one of the files; retrying in 20 seconds..."
-            sleep 20
-          done
+          download_one() {
+            local record="$1"
+            local rel="${record%%|*}"
+            local id="${record##*|}"
+            local dst="app/src/main/assets/www/$rel"
+            mkdir -p "$(dirname "$dst")"
+            echo "Downloading $rel"
+            curl --fail --location --silent --show-error \
+              --retry 10 --retry-delay 2 --retry-all-errors \
+              --connect-timeout 20 --max-time 180 \
+              "https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t" \
+              --output "$dst"
+            test -s "$dst"
+          }
+          export -f download_one
+          xargs -P 6 -I{} bash -c 'download_one "$1"' _ {} < /tmp/storyline-files.txt
 
-          if [ "$DOWNLOAD_OK" -ne 1 ]; then
-            echo 'Unable to download the complete Storyline folder after retries.'
-            exit 1
-          fi
-
-          INDEX_FILE="$(find story-download -type f -name index.html -print -quit)"
-          if [ -z "$INDEX_FILE" ]; then
-            echo 'index.html not found after downloading Storyline folder'
-            find story-download -maxdepth 5 -type f | sort
-            exit 1
-          fi
-          STORY_ROOT="$(dirname "$INDEX_FILE")"
-          cp -a "$STORY_ROOT"/. app/src/main/assets/www/
-          test -f app/src/main/assets/www/index.html
-          test -d app/src/main/assets/www/html5
-          test -d app/src/main/assets/www/story_content
-          test -f app/src/main/assets/www/story_content/video_5ZKA5I6IQ9M_22_48_256x144.mp4
           FILE_COUNT="$(find app/src/main/assets/www -type f | wc -l)"
           echo "Storyline files bundled: $FILE_COUNT"
-          test "$FILE_COUNT" -ge 100
+          test "$FILE_COUNT" -eq 111
+          test -s app/src/main/assets/www/index.html
+          test -s app/src/main/assets/www/html5/data/js/paths.js
+          test -s app/src/main/assets/www/story_content/video_5ZKA5I6IQ9M_22_48_256x144.mp4
 
       - name: Ensure Android SDK 35
         shell: bash
