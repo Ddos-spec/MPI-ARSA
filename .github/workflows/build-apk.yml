@@ -33,16 +33,18 @@ jobs:
           python -m pip install --upgrade pip gdown
           rm -rf story-download app/src/main/assets/www
           mkdir -p story-download app/src/main/assets/www
-          gdown --folder --remaining-ok 'https://drive.google.com/drive/folders/1FKjB-pHJzMMun4VvYgO-XwKdghfAvaYD' -O story-download
+          gdown --folder 'https://drive.google.com/drive/folders/1FKjB-pHJzMMun4VvYgO-XwKdghfAvaYD' -O story-download
           INDEX_FILE="$(find story-download -type f -name index.html -print -quit)"
           if [ -z "$INDEX_FILE" ]; then
             echo 'index.html not found after downloading Storyline folder'
-            find story-download -maxdepth 4 -type f | sort
+            find story-download -maxdepth 5 -type f | sort
             exit 1
           fi
           STORY_ROOT="$(dirname "$INDEX_FILE")"
           cp -a "$STORY_ROOT"/. app/src/main/assets/www/
           test -f app/src/main/assets/www/index.html
+          test -d app/src/main/assets/www/html5
+          test -d app/src/main/assets/www/story_content
           echo "Storyline files bundled: $(find app/src/main/assets/www -type f | wc -l)"
 
       - name: Ensure Android SDK 35
