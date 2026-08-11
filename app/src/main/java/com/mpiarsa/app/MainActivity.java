@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -26,6 +27,10 @@ public class MainActivity extends Activity {
     private static final String TAG = "MPI-ARSA";
     private static final String ASSET_HOST = "appassets.androidplatform.net";
     private static final String START_URL = "https://" + ASSET_HOST + "/assets/www/index.html";
+    private static final String ENHANCEMENT_CSS =
+            "https://" + ASSET_HOST + "/assets/arsa-enhancements.css";
+    private static final String ENHANCEMENT_JS =
+            "https://" + ASSET_HOST + "/assets/arsa-enhancements.js";
 
     private WebView webView;
 
@@ -45,23 +50,35 @@ public class MainActivity extends Activity {
 
     @SuppressLint("SetJavaScriptEnabled")
     private void initializeWebView(Bundle savedInstanceState) throws Exception {
-        // Fail with a visible diagnostic instead of silently closing if the bundled course is missing.
         try (InputStream ignored = getAssets().open("www/index.html")) {
-            // Asset exists.
+            // Storyline entry point exists.
         }
 
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
                 .build();
 
+        WebView.setWebContentsDebuggingEnabled(false);
+
         webView = new WebView(this);
         webView.setBackgroundColor(Color.BLACK);
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        webView.setVerticalScrollBarEnabled(false);
+        webView.setHorizontalScrollBarEnabled(false);
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_BOUND, true);
+        }
+
         setContentView(webView);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setLoadsImagesAutomatically(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
@@ -71,9 +88,9 @@ public class MainActivity extends Activity {
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
         settings.setSupportMultipleWindows(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        settings.setDefaultTextEncodingName("UTF-8");
 
-        // Local Storyline content is served through WebViewAssetLoader over HTTPS.
-        // Do not expose the app's file:// or content:// filesystem to web content.
+        // Storyline is served through a local HTTPS origin. Keep filesystem access closed.
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setAllowFileAccessFromFileURLs(false);
@@ -86,7 +103,10 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClientCompat() {
             @Override
-            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+            public WebResourceResponse shouldInterceptRequest(
+                    WebView view,
+                    WebResourceRequest request
+            ) {
                 return assetLoader.shouldInterceptRequest(request.getUrl());
             }
 
@@ -97,7 +117,10 @@ public class MainActivity extends Activity {
             }
 
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            public boolean shouldOverrideUrlLoading(
+                    WebView view,
+                    WebResourceRequest request
+            ) {
                 return handleNavigation(request.getUrl());
             }
 
@@ -106,11 +129,34 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 return handleNavigation(Uri.parse(url));
             }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                injectEnhancements(view);
+            }
         });
 
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
             webView.loadUrl(START_URL);
         }
+    }
+
+    private void injectEnhancements(WebView view) {
+        String script =
+                "(function(){"
+                        + "if(document.getElementById('arsa-native-enhancements'))return;"
+                        + "var c=document.createElement('link');"
+                        + "c.id='arsa-native-enhancements';"
+                        + "c.rel='stylesheet';"
+                        + "c.href='" + ENHANCEMENT_CSS + "';"
+                        + "(document.head||document.documentElement).appendChild(c);"
+                        + "var s=document.createElement('script');"
+                        + "s.src='" + ENHANCEMENT_JS + "';"
+                        + "s.defer=true;"
+                        + "(document.body||document.documentElement).appendChild(s);"
+                        + "})();";
+        view.evaluateJavascript(script, null);
     }
 
     private boolean handleNavigation(Uri uri) {
@@ -133,7 +179,6 @@ public class MainActivity extends Activity {
             return true;
         }
 
-        // Keep data/about/javascript and other WebView-internal navigation inside the WebView.
         return false;
     }
 
@@ -164,9 +209,6 @@ public class MainActivity extends Activity {
     }
 
     private void hideSystemUi() {
-        // Deliberately use the compatibility flags here instead of directly referencing
-        // Android 11-only WindowInsetsController classes, so Android 10 devices cannot fail
-        // class verification during Activity startup.
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_FULLSCREEN
                         | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
@@ -183,6 +225,24 @@ public class MainActivity extends Activity {
         if (hasFocus) {
             hideSystemUi();
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (webView != null) {
+            webView.onResume();
+            webView.resumeTimers();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        if (webView != null) {
+            webView.onPause();
+            webView.pauseTimers();
+        }
+        super.onPause();
     }
 
     @Override
