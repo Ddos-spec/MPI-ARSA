@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -33,7 +34,23 @@ jobs:
           python -m pip install --upgrade pip gdown
           rm -rf story-download app/src/main/assets/www
           mkdir -p story-download app/src/main/assets/www
-          gdown --folder 'https://drive.google.com/drive/folders/1FKjB-pHJzMMun4VvYgO-XwKdghfAvaYD' -O story-download
+
+          DOWNLOAD_OK=0
+          for attempt in 1 2 3 4 5; do
+            echo "Storyline download attempt $attempt/5"
+            if gdown --folder --continue 'https://drive.google.com/drive/folders/1FKjB-pHJzMMun4VvYgO-XwKdghfAvaYD' -O story-download; then
+              DOWNLOAD_OK=1
+              break
+            fi
+            echo "Google Drive throttled one of the files; retrying in 20 seconds..."
+            sleep 20
+          done
+
+          if [ "$DOWNLOAD_OK" -ne 1 ]; then
+            echo 'Unable to download the complete Storyline folder after retries.'
+            exit 1
+          fi
+
           INDEX_FILE="$(find story-download -type f -name index.html -print -quit)"
           if [ -z "$INDEX_FILE" ]; then
             echo 'index.html not found after downloading Storyline folder'
@@ -45,7 +62,10 @@ jobs:
           test -f app/src/main/assets/www/index.html
           test -d app/src/main/assets/www/html5
           test -d app/src/main/assets/www/story_content
-          echo "Storyline files bundled: $(find app/src/main/assets/www -type f | wc -l)"
+          test -f app/src/main/assets/www/story_content/video_5ZKA5I6IQ9M_22_48_256x144.mp4
+          FILE_COUNT="$(find app/src/main/assets/www -type f | wc -l)"
+          echo "Storyline files bundled: $FILE_COUNT"
+          test "$FILE_COUNT" -ge 100
 
       - name: Ensure Android SDK 35
         shell: bash
