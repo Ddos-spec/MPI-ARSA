@@ -28,6 +28,52 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare runtime smoke script
+        shell: bash
+        run: |
+          cat > smoke-test.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          API_LEVEL="$1"
+          APK="$(find apk -type f -name '*.apk' -print -quit)"
+          test -n "$APK"
+
+          adb install -r "$APK"
+          adb logcat -c
+          adb shell am force-stop com.mpiarsa.app
+          adb shell monkey -p com.mpiarsa.app -c android.intent.category.LAUNCHER 1
+
+          sleep 20
+
+          LOG="runtime-logcat-api-${API_LEVEL}.txt"
+          SHOT="mpi-arsa-api-${API_LEVEL}.png"
+          adb logcat -d -v threadtime > "$LOG" || true
+          adb exec-out screencap -p > "$SHOT" || true
+
+          PID="$(adb shell pidof com.mpiarsa.app | tr -d '\r' || true)"
+          if [ -z "$PID" ]; then
+            echo "::error::MPI ARSA process died after launch on API ${API_LEVEL}"
+            tail -n 300 "$LOG" || true
+            exit 1
+          fi
+
+          if grep -q "Process: com.mpiarsa.app" "$LOG"; then
+            echo "::error::AndroidRuntime crash detected for MPI ARSA on API ${API_LEVEL}"
+            grep -A 80 -B 10 "Process: com.mpiarsa.app" "$LOG" || true
+            exit 1
+          fi
+
+          if ! adb shell dumpsys activity activities | grep -q "com.mpiarsa.app/.MainActivity"; then
+            echo "::error::MPI ARSA process is alive but MainActivity is not active on API ${API_LEVEL}"
+            adb shell dumpsys activity activities | grep -A 8 -B 8 "com.mpiarsa.app" || true
+            exit 1
+          fi
+
+          echo "MPI ARSA is alive after 20 seconds on Android API ${API_LEVEL} (PID ${PID})."
+          EOF
+          chmod +x smoke-test.sh
+
       - name: Enable KVM group permissions
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -42,37 +88,8 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            set -eu
-            APK="$(find apk -type f -name '*.apk' -print -quit)"
-            test -n "$APK"
-
-            adb install -r "$APK"
-            adb logcat -c
-            adb shell am force-stop com.mpiarsa.app
-            adb shell monkey -p com.mpiarsa.app -c android.intent.category.LAUNCHER 1
-
-            sleep 20
-
-            adb logcat -d -v threadtime > runtime-logcat-api-${{ matrix.api-level }}.txt || true
-            adb exec-out screencap -p > mpi-arsa-api-${{ matrix.api-level }}.png || true
-
-            PID="$(adb shell pidof com.mpiarsa.app | tr -d '\r' || true)"
-            if [ -z "$PID" ]; then
-              echo "::error::MPI ARSA process died after launch on API ${{ matrix.api-level }}"
-              tail -n 300 runtime-logcat-api-${{ matrix.api-level }}.txt || true
-              exit 1
-            fi
-
-            if grep -q "Process: com.mpiarsa.app" runtime-logcat-api-${{ matrix.api-level }}.txt; then
-              echo "::error::AndroidRuntime crash detected for MPI ARSA on API ${{ matrix.api-level }}"
-              grep -A 80 -B 10 "Process: com.mpiarsa.app" runtime-logcat-api-${{ matrix.api-level }}.txt || true
-              exit 1
-            fi
-
-            adb shell dumpsys activity activities | grep -q "com.mpiarsa.app/.MainActivity"
-            echo "MPI ARSA is alive after 20 seconds on Android API ${{ matrix.api-level }} (PID $PID)."
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
+          script: bash smoke-test.sh ${{ matrix.api-level }}
 
       - name: Upload runtime diagnostics
         if: always()
