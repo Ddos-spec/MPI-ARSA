@@ -33,13 +33,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp /tmp/mpi-arsa-apk/app-debug.apk dist/MPI-ARSA-v1.0.4.apk
+          cp /tmp/mpi-arsa-apk/app-debug.apk dist/MPI-ARSA-v1.0.5.apk
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add dist/MPI-ARSA-v1.0.4.apk
+          git add dist/MPI-ARSA-v1.0.5.apk
           if git diff --cached --quiet; then
             echo "APK already up to date"
             exit 0
           fi
-          git commit -m "chore: publish MPI ARSA v1.0.4 APK [skip ci]"
+          git commit -m "chore: publish MPI ARSA v1.0.5 APK [skip ci]"
           git push origin main
