@@ -1,1 +1,1 @@
-Trigger APK build after workflow fix.
+Trigger APK build for MPI ARSA v1.0.4 after Storyline root update.
