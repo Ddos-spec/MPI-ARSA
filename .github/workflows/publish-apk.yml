@@ -1,0 +1,45 @@
+name: Publish APK to Repository
+
+on:
+  workflow_run:
+    workflows: ["Build MPI ARSA APK"]
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mpi-arsa-apk
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name MPI-ARSA-debug-apk --dir /tmp/mpi-arsa-apk
+          test -s /tmp/mpi-arsa-apk/app-debug.apk
+
+      - name: Publish stable APK path
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp /tmp/mpi-arsa-apk/app-debug.apk dist/MPI-ARSA-v1.0.4.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/MPI-ARSA-v1.0.4.apk
+          if git diff --cached --quiet; then
+            echo "APK already up to date"
+            exit 0
+          fi
+          git commit -m "chore: publish MPI ARSA v1.0.4 APK [skip ci]"
+          git push origin main
