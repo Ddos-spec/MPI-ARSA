@@ -10,8 +10,8 @@ android {
         applicationId 'com.mpiarsa.app'
         minSdk 21
         targetSdk 35
-        versionCode 4
-        versionName '1.0.3'
+        versionCode 5
+        versionName '1.0.4'
     }
 
     buildTypes {
@@ -24,4 +24,43 @@ android {
 
 dependencies {
     implementation 'androidx.webkit:webkit:1.14.0'
+}
+
+// The Android project intentionally keeps the large Storyline export outside Git.
+// GitHub Actions downloads the known-good asset set first. These four files are the
+// newer MPI ARSA 5 root publish files supplied on 2026-08-21, so overwrite only
+// those roots immediately before Android packaging while leaving the wrapper intact.
+def storylineRootUpdate = [
+        'index.html'           : '131WYEPgc3AKp75EnWpe6Hq4w5v4X2fwo',
+        'story.html'           : '1c9JH4FC23PTD1BifDpZX2-GVCY4iJXN2',
+        'meta.xml'             : '1bKiIblnS3YW4CiYIwVqR9GviqRKVsOk2',
+        'analytics-frame.html' : '1ICNwQw7Oe0-Oq97eWVUtwClKszKn6PI9'
+]
+
+tasks.register('applyStorylineRootUpdate') {
+    doLast {
+        File wwwDir = file('src/main/assets/www')
+        wwwDir.mkdirs()
+
+        storylineRootUpdate.each { String relativePath, String driveId ->
+            File destination = new File(wwwDir, relativePath)
+            destination.parentFile.mkdirs()
+            String downloadUrl = "https://drive.usercontent.google.com/download?id=${driveId}&export=download&confirm=t"
+
+            println "Applying MPI ARSA 5 root update: ${relativePath}"
+            new URL(downloadUrl).withInputStream { input ->
+                destination.withOutputStream { output ->
+                    output << input
+                }
+            }
+
+            if (!destination.isFile() || destination.length() == 0) {
+                throw new GradleException("Storyline root update is empty: ${relativePath}")
+            }
+        }
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('applyStorylineRootUpdate')
 }
