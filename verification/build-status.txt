@@ -1,5 +1,0 @@
-sourceCommit=488b4e483720efa25d7e7a02432192d80373cb91
-restore=success
-assemble=success
-verify=success
-upload=success
