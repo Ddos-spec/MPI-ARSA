@@ -147,3 +147,37 @@ jobs:
             uiautomator-api-${{ matrix.api-level }}.xml
           if-no-files-found: ignore
           retention-days: 14
+
+  prepare-release-candidate:
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download exact APK that passed the runtime matrix
+        uses: actions/download-artifact@v5
+        with:
+          name: MPI-ARSA-debug-apk
+          path: release-candidate/apk
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attach upstream source identity
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          test -s release-candidate/apk/app-debug.apk
+          cat > release-candidate/source-build.env <<EOF
+          SOURCE_SHA=$SOURCE_SHA
+          BUILD_RUN_ID=$BUILD_RUN_ID
+          EOF
+
+      - name: Upload tested release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: MPI-ARSA-tested-apk
+          path: release-candidate/
+          if-no-files-found: error
+          retention-days: 7
