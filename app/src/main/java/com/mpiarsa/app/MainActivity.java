@@ -25,7 +25,6 @@ import android.webkit.JavascriptInterface;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.URLUtil;
 import android.webkit.WebChromeClient;
-import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -37,6 +36,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.webkit.WebResourceErrorCompat;
 import androidx.webkit.WebViewAssetLoader;
 import androidx.webkit.WebViewClientCompat;
 
@@ -669,7 +669,7 @@ public class MainActivity extends Activity {
         public void onReceivedError(
                 WebView view,
                 WebResourceRequest request,
-                WebResourceError error
+                WebResourceErrorCompat error
         ) {
             super.onReceivedError(view, request, error);
             if (request.isForMainFrame()) {
