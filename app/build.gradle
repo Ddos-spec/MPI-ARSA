@@ -2,14 +2,6 @@ plugins {
     id 'com.android.application'
 }
 
-def signingEnv = System.getenv()
-def releaseSigningReady = [
-        'ANDROID_KEYSTORE_PATH',
-        'ANDROID_KEYSTORE_PASSWORD',
-        'ANDROID_KEY_ALIAS',
-        'ANDROID_KEY_PASSWORD'
-].every { key -> signingEnv[key]?.trim() }
-
 android {
     namespace 'com.mpiarsa.app'
     compileSdk 35
@@ -22,28 +14,13 @@ android {
         versionName '1.0.7'
     }
 
-    signingConfigs {
-        release {
-            if (releaseSigningReady) {
-                storeFile file(signingEnv['ANDROID_KEYSTORE_PATH'])
-                storePassword signingEnv['ANDROID_KEYSTORE_PASSWORD']
-                keyAlias signingEnv['ANDROID_KEY_ALIAS']
-                keyPassword signingEnv['ANDROID_KEY_PASSWORD']
-            }
-        }
-    }
-
     buildTypes {
         debug {
             debuggable true
         }
         release {
-            debuggable false
             minifyEnabled false
             shrinkResources false
-            if (releaseSigningReady) {
-                signingConfig signingConfigs.release
-            }
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
