@@ -1,4 +1,4 @@
-name: Publish APK to Repository
+name: Publish APK
 
 on:
   workflow_run:
@@ -13,11 +13,25 @@ jobs:
   publish:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
         with:
           ref: main
+
+      - name: Read app version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n "s/^[[:space:]]*versionName[[:space:]]*'\([^']*\)'.*/\1/p" app/build.gradle | head -n 1)"
+          if [ -z "$VERSION" ]; then
+            echo "Unable to read versionName from app/build.gradle" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Download APK artifact
         env:
@@ -29,17 +43,56 @@ jobs:
           gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name MPI-ARSA-debug-apk --dir /tmp/mpi-arsa-apk
           test -s /tmp/mpi-arsa-apk/app-debug.apk
 
-      - name: Publish stable APK path
+      - name: Prepare distributable APK
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          mkdir -p dist
-          cp /tmp/mpi-arsa-apk/app-debug.apk dist/MPI-ARSA-v1.0.5.apk
+          mkdir -p dist /tmp/mpi-arsa-release
+
+          cp /tmp/mpi-arsa-apk/app-debug.apk "dist/MPI-ARSA-v${VERSION}.apk"
+          cp /tmp/mpi-arsa-apk/app-debug.apk dist/MPI-ARSA.apk
+          cp /tmp/mpi-arsa-apk/app-debug.apk /tmp/mpi-arsa-release/MPI-ARSA.apk
+
+          (
+            cd /tmp/mpi-arsa-release
+            sha256sum MPI-ARSA.apk > MPI-ARSA.apk.sha256
+          )
+
+      - name: Publish APK to repository
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add dist/MPI-ARSA-v1.0.5.apk
+          git add dist/MPI-ARSA.apk "dist/MPI-ARSA-v${VERSION}.apk"
+
           if git diff --cached --quiet; then
-            echo "APK already up to date"
-            exit 0
+            echo "Repository APK files already up to date"
+          else
+            git commit -m "chore: publish MPI ARSA v${VERSION} APK [skip ci]"
+            git push origin main
           fi
-          git commit -m "chore: publish MPI ARSA v1.0.5 APK [skip ci]"
-          git push origin main
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target main \
+              --title "MPI ARSA v${VERSION}" \
+              --notes "Android APK MPI ARSA v${VERSION}. Download MPI-ARSA.apk di bagian Assets untuk instalasi."
+          fi
+
+          gh release upload "$TAG" \
+            /tmp/mpi-arsa-release/MPI-ARSA.apk \
+            /tmp/mpi-arsa-release/MPI-ARSA.apk.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
