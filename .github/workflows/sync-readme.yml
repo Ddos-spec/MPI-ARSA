@@ -1,0 +1,115 @@
+name: Sync README App Metadata
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/build.gradle'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-readme-app-metadata
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Read Android metadata and update README
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="$(sed -n "s/^[[:space:]]*versionName[[:space:]]*'\([^']*\)'.*/\1/p" app/build.gradle | head -n 1)"
+          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -n 1)"
+          MIN_SDK="$(sed -n 's/^[[:space:]]*minSdk[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -n 1)"
+          TARGET_SDK="$(sed -n 's/^[[:space:]]*targetSdk[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -n 1)"
+
+          for value in VERSION VERSION_CODE MIN_SDK TARGET_SDK; do
+            if [ -z "${!value}" ]; then
+              echo "Unable to read $value from app/build.gradle" >&2
+              exit 1
+            fi
+          done
+
+          export VERSION VERSION_CODE MIN_SDK TARGET_SDK
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          android_by_api = {
+              21: "5.0",
+              22: "5.1",
+              23: "6.0",
+              24: "7.0",
+              25: "7.1",
+              26: "8.0",
+              27: "8.1",
+              28: "9",
+              29: "10",
+              30: "11",
+              31: "12",
+              32: "12L",
+              33: "13",
+              34: "14",
+              35: "15",
+          }
+
+          version = os.environ["VERSION"]
+          version_code = os.environ["VERSION_CODE"]
+          min_sdk = int(os.environ["MIN_SDK"])
+          target_sdk = os.environ["TARGET_SDK"]
+          android = android_by_api.get(min_sdk, f"API {min_sdk}")
+          badge_android = android.replace(" ", "%20").replace(".", ".")
+
+          replacements = {
+              "APP_BADGE": (
+                  f"[![Android](https://img.shields.io/badge/Android-{badge_android}%2B-"
+                  f"3DDC84?style=flat-square&logo=android&logoColor=white)](#persyaratan)"
+              ),
+              "APP_REQUIREMENTS": (
+                  f"- Android **{android} (API {min_sdk})** atau lebih baru.\n"
+                  f"- Target SDK aplikasi: **{target_sdk}**."
+              ),
+              "APP_METADATA": (
+                  f"**v{version}** · `versionCode {version_code}` · "
+                  f"`minSdk {min_sdk}` · `targetSdk {target_sdk}`"
+              ),
+          }
+
+          path = Path("README.md")
+          text = path.read_text(encoding="utf-8")
+
+          for marker, content in replacements.items():
+              pattern = rf"<!-- {marker}_START -->.*?<!-- {marker}_END -->"
+              replacement = f"<!-- {marker}_START -->\n{content}\n<!-- {marker}_END -->"
+              text, count = re.subn(pattern, replacement, text, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f"README marker {marker} not found exactly once")
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit README when metadata changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- README.md; then
+            echo "README metadata is already current."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "docs: sync Android metadata [skip ci]"
+          git push origin main
