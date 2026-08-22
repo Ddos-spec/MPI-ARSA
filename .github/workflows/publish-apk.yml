@@ -24,17 +24,28 @@ jobs:
         with:
           ref: main
 
-      - name: Read app version
-        id: version
+      - name: Read app metadata
+        id: app
         shell: bash
         run: |
           set -euo pipefail
+
           VERSION="$(sed -n "s/^[[:space:]]*versionName[[:space:]]*'\([^']*\)'.*/\1/p" app/build.gradle | head -n 1)"
-          if [ -z "$VERSION" ]; then
-            echo "Unable to read versionName from app/build.gradle" >&2
-            exit 1
-          fi
+          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -n 1)"
+          MIN_SDK="$(sed -n 's/^[[:space:]]*minSdk[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -n 1)"
+          TARGET_SDK="$(sed -n 's/^[[:space:]]*targetSdk[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -n 1)"
+
+          for value in VERSION VERSION_CODE MIN_SDK TARGET_SDK; do
+            if [ -z "${!value}" ]; then
+              echo "Unable to read $value from app/build.gradle" >&2
+              exit 1
+            fi
+          done
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "min_sdk=$MIN_SDK" >> "$GITHUB_OUTPUT"
+          echo "target_sdk=$TARGET_SDK" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Download APK artifact
@@ -49,7 +60,7 @@ jobs:
 
       - name: Prepare distributable APK
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.app.outputs.version }}
         run: |
           set -euo pipefail
           mkdir -p dist /tmp/mpi-arsa-release
@@ -63,27 +74,78 @@ jobs:
             sha256sum MPI-ARSA.apk > MPI-ARSA.apk.sha256
           )
 
-      - name: Publish APK to repository
+      - name: Sync README app metadata
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.app.outputs.version }}
+          VERSION_CODE: ${{ steps.app.outputs.version_code }}
+          MIN_SDK: ${{ steps.app.outputs.min_sdk }}
+          TARGET_SDK: ${{ steps.app.outputs.target_sdk }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path("README.md")
+          text = path.read_text(encoding="utf-8")
+
+          version = os.environ["VERSION"]
+          version_code = os.environ["VERSION_CODE"]
+          min_sdk = os.environ["MIN_SDK"]
+          target_sdk = os.environ["TARGET_SDK"]
+
+          replacements = {
+              "APP_BADGE": (
+                  f"[![Android API](https://img.shields.io/badge/Android%20API-"
+                  f"{min_sdk}%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](#persyaratan)"
+              ),
+              "APP_REQUIREMENTS": (
+                  f"- Android **API {min_sdk}** atau lebih baru.\n"
+                  f"- Target SDK aplikasi: **{target_sdk}**."
+              ),
+              "APP_METADATA": (
+                  f"**v{version}** · `versionCode {version_code}` · "
+                  f"`minSdk {min_sdk}` · `targetSdk {target_sdk}`"
+              ),
+          }
+
+          for marker, content in replacements.items():
+              pattern = (
+                  rf"<!-- {marker}_START -->.*?<!-- {marker}_END -->"
+              )
+              replacement = (
+                  f"<!-- {marker}_START -->\n{content}\n<!-- {marker}_END -->"
+              )
+              text, count = re.subn(pattern, replacement, text, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f"README marker {marker} not found exactly once")
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Publish APK and README to repository
+        env:
+          VERSION: ${{ steps.app.outputs.version }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add dist/MPI-ARSA.apk "dist/MPI-ARSA-v${VERSION}.apk"
+          git add README.md dist/MPI-ARSA.apk "dist/MPI-ARSA-v${VERSION}.apk"
 
           if git diff --cached --quiet; then
-            echo "Repository APK files already up to date"
+            echo "Repository files already up to date"
           else
-            git commit -m "chore: publish MPI ARSA v${VERSION} APK [skip ci]"
+            git commit -m "chore: publish MPI ARSA v${VERSION} and sync README [skip ci]"
             git push origin main
           fi
 
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
-          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.app.outputs.tag }}
+          VERSION: ${{ steps.app.outputs.version }}
         run: |
           set -euo pipefail
 
