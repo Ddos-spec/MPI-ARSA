@@ -1,9 +1,0 @@
-version=1.0.7
-versionCode=8
-sourceCommit=38a499536cbf9d37b78b086dc768cad3d2973351
-javascript=pass
-javaCompile=pass
-manifest=pass
-invalidReleaseV1.0.6=absent
-releaseSigningSecrets=missing
-overall=pass
