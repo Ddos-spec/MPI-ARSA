@@ -13,20 +13,32 @@ jobs:
   smoke-test:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        api-level: [29, 34]
+        include:
+          - api-level: 21
+            arch: x86
+            profile: Nexus 5
+          - api-level: 29
+            arch: x86_64
+            profile: pixel_6
+          - api-level: 34
+            arch: x86_64
+            profile: pixel_6
 
     steps:
-      - name: Download APK from triggering build
+      - name: Download APK from exact triggering build
         uses: actions/download-artifact@v5
         with:
           name: MPI-ARSA-debug-apk
           path: apk
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install screenshot analyzer
+        run: python3 -m pip install --disable-pip-version-check --quiet pillow
 
       - name: Prepare runtime smoke script
         shell: bash
@@ -44,12 +56,22 @@ jobs:
           adb shell am force-stop com.mpiarsa.app
           adb shell monkey -p com.mpiarsa.app -c android.intent.category.LAUNCHER 1
 
-          sleep 20
+          READY=0
+          for _ in $(seq 1 35); do
+            if adb logcat -d -v brief | grep -q 'MPI-ARSA.*CONTENT_READY'; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
 
           LOG="runtime-logcat-api-${API_LEVEL}.txt"
           SHOT="mpi-arsa-api-${API_LEVEL}.png"
+          UI="uiautomator-api-${API_LEVEL}.xml"
           adb logcat -d -v threadtime > "$LOG" || true
           adb exec-out screencap -p > "$SHOT" || true
+          adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+          adb pull /sdcard/window.xml "$UI" >/dev/null 2>&1 || true
 
           PID="$(adb shell pidof com.mpiarsa.app | tr -d '\r' || true)"
           if [ -z "$PID" ]; then
@@ -70,7 +92,30 @@ jobs:
             exit 1
           fi
 
-          echo "MPI ARSA is alive after 20 seconds on Android API ${API_LEVEL} (PID ${PID})."
+          if [ "$READY" -ne 1 ]; then
+            echo "::error::Storyline never signaled CONTENT_READY on API ${API_LEVEL}"
+            tail -n 300 "$LOG" || true
+            exit 1
+          fi
+
+          python3 - "$SHOT" <<'PY'
+          import sys
+          from PIL import Image, ImageStat
+
+          path = sys.argv[1]
+          image = Image.open(path).convert("RGB")
+          sample = image.resize((160, 90))
+          pixels = list(sample.getdata())
+          near_black = sum(1 for r, g, b in pixels if max(r, g, b) < 12) / len(pixels)
+          gray = sample.convert("L")
+          contrast = ImageStat.Stat(gray).stddev[0]
+
+          print(f"screenshot near_black={near_black:.4f} contrast={contrast:.2f}")
+          if near_black > 0.985 or contrast < 1.8:
+              raise SystemExit("Screenshot appears blank or nearly uniform")
+          PY
+
+          echo "MPI ARSA rendered usable content on Android API ${API_LEVEL} (PID ${PID})."
           EOF
           chmod +x smoke-test.sh
 
@@ -85,8 +130,8 @@ jobs:
         with:
           api-level: ${{ matrix.api-level }}
           target: google_apis
-          arch: x86_64
-          profile: pixel_6
+          arch: ${{ matrix.arch }}
+          profile: ${{ matrix.profile }}
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
           script: bash smoke-test.sh ${{ matrix.api-level }}
@@ -99,5 +144,6 @@ jobs:
           path: |
             runtime-logcat-api-${{ matrix.api-level }}.txt
             mpi-arsa-api-${{ matrix.api-level }}.png
+            uiautomator-api-${{ matrix.api-level }}.xml
           if-no-files-found: ignore
           retention-days: 14
