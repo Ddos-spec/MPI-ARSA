@@ -1,0 +1,30 @@
+name: Cleanup Invalid v1.0.6 Release
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cleanup-invalid-v1.0.6.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove invalid debug release and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v1.0.6 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete v1.0.6 \
+              --repo "$GITHUB_REPOSITORY" \
+              --cleanup-tag \
+              --yes
+            echo "Removed invalid v1.0.6 release and tag."
+          else
+            echo "No v1.0.6 release found; nothing to clean."
+          fi
