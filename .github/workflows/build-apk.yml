@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -24,7 +24,6 @@ jobs:
           java-version: '17'
 
       - name: Restore Storyline assets from known-good APK
-        id: restore
         shell: bash
         run: |
           set -euo pipefail
@@ -57,11 +56,9 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build debug APK
-        id: assemble
         run: gradle :app:assembleDebug --stacktrace
 
       - name: Verify APK contents
-        id: verify
         shell: bash
         run: |
           set -euo pipefail
@@ -75,37 +72,9 @@ jobs:
           ls -lh "$APK"
 
       - name: Upload APK artifact
-        id: upload
         uses: actions/upload-artifact@v4
         with:
           name: MPI-ARSA-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
-
-      - name: Record build result
-        if: always()
-        shell: bash
-        env:
-          RESTORE_OUTCOME: ${{ steps.restore.outcome }}
-          ASSEMBLE_OUTCOME: ${{ steps.assemble.outcome }}
-          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
-          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
-        run: |
-          set -euo pipefail
-          mkdir -p verification
-          cat > verification/build-status.txt <<EOF
-          sourceCommit=${GITHUB_SHA}
-          restore=${RESTORE_OUTCOME}
-          assemble=${ASSEMBLE_OUTCOME}
-          verify=${VERIFY_OUTCOME}
-          upload=${UPLOAD_OUTCOME}
-          EOF
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add verification/build-status.txt
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: record APK build status [skip ci]"
-            git push origin main
-          fi
