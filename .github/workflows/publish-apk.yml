@@ -2,7 +2,7 @@ name: Publish Signed APK
 
 on:
   workflow_run:
-    workflows: ["Build MPI ARSA APK"]
+    workflows: ["Runtime Smoke Test"]
     types: [completed]
 
 permissions:
@@ -26,27 +26,55 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout exact build source
+      - name: Download runtime-tested candidate
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mpi-arsa-tested
+          gh run download "$RUNTIME_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name MPI-ARSA-tested-apk \
+            --dir /tmp/mpi-arsa-tested
+
+          META="$(find /tmp/mpi-arsa-tested -type f -name source-build.env -print -quit)"
+          TEST_APK="$(find /tmp/mpi-arsa-tested -type f -name app-debug.apk -print -quit)"
+          test -s "$META"
+          test -s "$TEST_APK"
+
+          SOURCE_SHA="$(sed -n 's/^SOURCE_SHA=//p' "$META" | head -n 1)"
+          BUILD_RUN_ID="$(sed -n 's/^BUILD_RUN_ID=//p' "$META" | head -n 1)"
+          test -n "$SOURCE_SHA"
+          test -n "$BUILD_RUN_ID"
+
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "build_run_id=$BUILD_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "test_apk=$TEST_APK" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact tested source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ steps.source.outputs.source_sha }}
           fetch-depth: 0
 
-      - name: Ensure build source is still current
+      - name: Ensure tested source is still current
         id: current
         shell: bash
         env:
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
         run: |
           set -euo pipefail
           git fetch origin main
 
-          if git diff --quiet "$HEAD_SHA" origin/main -- app build.gradle settings.gradle .github/workflows; then
+          if git diff --quiet "$SOURCE_SHA" origin/main -- app build.gradle settings.gradle .github/workflows; then
             echo "current=true" >> "$GITHUB_OUTPUT"
-            echo "Build source is still current for application and release files."
+            echo "Tested source is still current for application and release files."
           else
             echo "current=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::A newer application/release change exists on main; this build will not be published."
+            echo "::notice::A newer application/release change exists on main; this tested candidate will not be published."
           fi
 
       - name: Read app metadata
@@ -101,32 +129,19 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Debug APK remains test-only. No debug binary will be published as a production release."
+            echo "::notice::Runtime-tested debug APK remains test-only. No debug binary will be published as a production release."
           fi
-
-      - name: Download test APK from exact triggering build
-        if: steps.signing.outputs.ready == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/mpi-arsa-debug
-          gh run download "$RUN_ID" \
-            --repo "$GITHUB_REPOSITORY" \
-            --name MPI-ARSA-debug-apk \
-            --dir /tmp/mpi-arsa-debug
-          test -s /tmp/mpi-arsa-debug/app-debug.apk
 
       - name: Restore exact Storyline assets from tested APK
         if: steps.signing.outputs.ready == 'true'
+        env:
+          TEST_APK: ${{ steps.source.outputs.test_apk }}
         shell: bash
         run: |
           set -euo pipefail
           rm -rf /tmp/mpi-arsa-unpacked app/src/main/assets/www
           mkdir -p /tmp/mpi-arsa-unpacked app/src/main/assets/www
-          unzip -q /tmp/mpi-arsa-debug/app-debug.apk 'assets/www/*' -d /tmp/mpi-arsa-unpacked
+          unzip -q "$TEST_APK" 'assets/www/*' -d /tmp/mpi-arsa-unpacked
           test -s /tmp/mpi-arsa-unpacked/assets/www/index.html
           cp -a /tmp/mpi-arsa-unpacked/assets/www/. app/src/main/assets/www/
 
@@ -185,7 +200,9 @@ jobs:
         env:
           VERSION: ${{ steps.app.outputs.version }}
           VERSION_CODE: ${{ steps.app.outputs.version_code }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          BUILD_RUN_ID: ${{ steps.source.outputs.build_run_id }}
+          RUNTIME_RUN_ID: ${{ github.event.workflow_run.id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -198,8 +215,9 @@ jobs:
           cat > /tmp/mpi-arsa-release/build-info.txt <<EOF
           version=$VERSION
           versionCode=$VERSION_CODE
-          sourceCommit=$HEAD_SHA
-          buildWorkflowRun=${{ github.event.workflow_run.id }}
+          sourceCommit=$SOURCE_SHA
+          buildWorkflowRun=$BUILD_RUN_ID
+          runtimeWorkflowRun=$RUNTIME_RUN_ID
           artifact=MPI-ARSA.apk
           EOF
 
@@ -209,7 +227,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.app.outputs.tag }}
           VERSION: ${{ steps.app.outputs.version }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -218,6 +236,6 @@ jobs:
             /tmp/mpi-arsa-release/MPI-ARSA.apk.sha256 \
             /tmp/mpi-arsa-release/build-info.txt \
             --repo "$GITHUB_REPOSITORY" \
-            --target "$HEAD_SHA" \
+            --target "$SOURCE_SHA" \
             --title "MPI ARSA v${VERSION}" \
-            --notes "Production-signed Android APK MPI ARSA v${VERSION}. Source commit: ${HEAD_SHA}."
+            --notes "Production-signed Android APK MPI ARSA v${VERSION}. Runtime matrix passed on API 21, 29, and 34. Source commit: ${SOURCE_SHA}."
