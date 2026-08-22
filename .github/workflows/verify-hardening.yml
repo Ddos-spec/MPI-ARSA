@@ -1,0 +1,133 @@
+name: Verify Hardening
+
+on:
+  push:
+    paths:
+      - '.github/workflows/verify-hardening.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+  ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+  ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+  ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Verify source and cleanup invalid release
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set +e
+          mkdir -p verification
+          REPORT="verification/hardening-status.txt"
+          : > "$REPORT"
+
+          VERSION="$(sed -n "s/^[[:space:]]*versionName[[:space:]]*'\([^']*\)'.*/\1/p" app/build.gradle | head -n 1)"
+          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -n 1)"
+          echo "version=$VERSION" >> "$REPORT"
+          echo "versionCode=$VERSION_CODE" >> "$REPORT"
+          echo "sourceCommit=$(git rev-parse HEAD)" >> "$REPORT"
+
+          node --check app/src/main/assets/arsa-enhancements.js
+          JS_STATUS=$?
+          if [ "$JS_STATUS" -eq 0 ]; then
+            echo "javascript=pass" >> "$REPORT"
+          else
+            echo "javascript=fail" >> "$REPORT"
+          fi
+
+          gradle :app:compileDebugJavaWithJavac --stacktrace
+          JAVA_STATUS=$?
+          if [ "$JAVA_STATUS" -eq 0 ]; then
+            echo "javaCompile=pass" >> "$REPORT"
+          else
+            echo "javaCompile=fail" >> "$REPORT"
+          fi
+
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          ET.parse('app/src/main/AndroidManifest.xml')
+          PY
+          MANIFEST_STATUS=$?
+          if [ "$MANIFEST_STATUS" -eq 0 ]; then
+            echo "manifest=pass" >> "$REPORT"
+          else
+            echo "manifest=fail" >> "$REPORT"
+          fi
+
+          if gh release view v1.0.6 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete v1.0.6 --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          fi
+          if gh release view v1.0.6 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "invalidReleaseV1.0.6=still-present" >> "$REPORT"
+            RELEASE_STATUS=1
+          else
+            echo "invalidReleaseV1.0.6=absent" >> "$REPORT"
+            RELEASE_STATUS=0
+          fi
+
+          SIGNING_READY=1
+          for key in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!key:-}" ]; then
+              SIGNING_READY=0
+            fi
+          done
+          if [ "$SIGNING_READY" -eq 1 ]; then
+            echo "releaseSigningSecrets=ready" >> "$REPORT"
+          else
+            echo "releaseSigningSecrets=missing" >> "$REPORT"
+          fi
+
+          if [ "$JS_STATUS" -eq 0 ] && [ "$JAVA_STATUS" -eq 0 ] && [ "$MANIFEST_STATUS" -eq 0 ] && [ "$RELEASE_STATUS" -eq 0 ]; then
+            echo "overall=pass" >> "$REPORT"
+            EXIT_STATUS=0
+          else
+            echo "overall=fail" >> "$REPORT"
+            EXIT_STATUS=1
+          fi
+
+          echo "exit_status=$EXIT_STATUS" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Commit verification report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add verification/hardening-status.txt
+          if git diff --cached --quiet; then
+            echo "Verification report unchanged."
+          else
+            git commit -m "chore: record hardening verification [skip ci]"
+            git push origin main
+          fi
+
+      - name: Fail workflow when verification failed
+        if: steps.verify.outputs.exit_status != '0'
+        run: exit 1
