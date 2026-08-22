@@ -9,6 +9,10 @@ permissions:
   contents: write
   actions: read
 
+concurrency:
+  group: publish-apk
+  cancel-in-progress: false
+
 jobs:
   publish:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
