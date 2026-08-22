@@ -1,6 +1,6 @@
 version=1.0.7
 versionCode=8
-sourceCommit=012e3e9140bff9697d293b08bd5377cc0a7046a9
+sourceCommit=77b4fb568e1ab4b39519cdbc7c0720dcf77f1d7a
 javascript=pass
 javaCompile=fail
 manifest=pass
