@@ -1,4 +1,4 @@
-# verification trigger: 3
+# verification trigger: 4
 name: Verify Hardening
 
 on:
