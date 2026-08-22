@@ -66,7 +66,7 @@ Android dapat menampilkan peringatan keamanan untuk APK yang dipasang di luar Go
 ## Versi saat ini
 
 <!-- APP_METADATA_START -->
-**v1.0.5** · `versionCode 6` · `minSdk 21` · `targetSdk 35`
+**v1.0.6** · `versionCode 7` · `minSdk 21` · `targetSdk 35`
 <!-- APP_METADATA_END -->
 
 Data di atas tidak diedit manual. Workflow publikasi membaca `versionName`, `versionCode`, `minSdk`, dan `targetSdk` langsung dari `app/build.gradle`, kemudian memperbarui README setiap build sukses.
