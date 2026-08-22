@@ -1,4 +1,4 @@
-name: Publish APK
+name: Publish Signed APK
 
 on:
   workflow_run:
@@ -10,155 +10,214 @@ permissions:
   actions: read
 
 concurrency:
-  group: publish-apk
+  group: publish-signed-apk
   cancel-in-progress: false
+
+env:
+  ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+  ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+  ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+  ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
 jobs:
   publish:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout main
+      - name: Checkout exact build source
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Ensure build source is still current
+        id: current
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+
+          if git diff --quiet "$HEAD_SHA" origin/main -- app build.gradle settings.gradle .github/workflows; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+            echo "Build source is still current for application and release files."
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::A newer application/release change exists on main; this build will not be published."
+          fi
 
       - name: Read app metadata
         id: app
+        if: steps.current.outputs.current == 'true'
         shell: bash
         run: |
           set -euo pipefail
-
           VERSION="$(sed -n "s/^[[:space:]]*versionName[[:space:]]*'\([^']*\)'.*/\1/p" app/build.gradle | head -n 1)"
           VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -n 1)"
-          MIN_SDK="$(sed -n 's/^[[:space:]]*minSdk[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -n 1)"
-          TARGET_SDK="$(sed -n 's/^[[:space:]]*targetSdk[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -n 1)"
 
-          for value in VERSION VERSION_CODE MIN_SDK TARGET_SDK; do
-            if [ -z "${!value}" ]; then
-              echo "Unable to read $value from app/build.gradle" >&2
-              exit 1
-            fi
-          done
+          if [ -z "$VERSION" ] || [ -z "$VERSION_CODE" ]; then
+            echo "Unable to read version metadata from app/build.gradle" >&2
+            exit 1
+          fi
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
-          echo "min_sdk=$MIN_SDK" >> "$GITHUB_OUTPUT"
-          echo "target_sdk=$TARGET_SDK" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Download APK artifact
+      - name: Refuse mutable version tags
+        id: release
+        if: steps.current.outputs.current == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.app.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release $TAG already exists. Releases are immutable; bump versionName/versionCode for a new binary."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check release signing configuration
+        id: signing
+        if: steps.current.outputs.current == 'true' && steps.release.outputs.exists == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for key in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!key:-}" ]; then
+              echo "::warning::$key is not configured; production release publishing is disabled."
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -eq 0 ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Debug APK remains test-only. No debug binary will be published as a production release."
+          fi
+
+      - name: Download test APK from exact triggering build
+        if: steps.signing.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/mpi-arsa-apk
-          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name MPI-ARSA-debug-apk --dir /tmp/mpi-arsa-apk
-          test -s /tmp/mpi-arsa-apk/app-debug.apk
+          mkdir -p /tmp/mpi-arsa-debug
+          gh run download "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name MPI-ARSA-debug-apk \
+            --dir /tmp/mpi-arsa-debug
+          test -s /tmp/mpi-arsa-debug/app-debug.apk
 
-      - name: Prepare distributable APK
+      - name: Restore exact Storyline assets from tested APK
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/mpi-arsa-unpacked app/src/main/assets/www
+          mkdir -p /tmp/mpi-arsa-unpacked app/src/main/assets/www
+          unzip -q /tmp/mpi-arsa-debug/app-debug.apk 'assets/www/*' -d /tmp/mpi-arsa-unpacked
+          test -s /tmp/mpi-arsa-unpacked/assets/www/index.html
+          cp -a /tmp/mpi-arsa-unpacked/assets/www/. app/src/main/assets/www/
+
+      - name: Set up JDK 17
+        if: steps.signing.outputs.ready == 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        if: steps.signing.outputs.ready == 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Prepare release keystore
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE_PATH="$RUNNER_TEMP/mpi-arsa-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle :app:assembleRelease --stacktrace
+          test -s app/build/outputs/apk/release/app-release.apk
+
+      - name: Verify production APK
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+
+          test -x "$APKSIGNER"
+          test -x "$AAPT"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+
+          if "$AAPT" dump badging "$APK" | grep -q '^application-debuggable'; then
+            echo "::error::Refusing to publish a debuggable APK."
+            exit 1
+          fi
+
+      - name: Prepare immutable release assets
+        if: steps.signing.outputs.ready == 'true'
         env:
           VERSION: ${{ steps.app.outputs.version }}
+          VERSION_CODE: ${{ steps.app.outputs.version_code }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist /tmp/mpi-arsa-release
-
-          cp /tmp/mpi-arsa-apk/app-debug.apk "dist/MPI-ARSA-v${VERSION}.apk"
-          cp /tmp/mpi-arsa-apk/app-debug.apk dist/MPI-ARSA.apk
-          cp /tmp/mpi-arsa-apk/app-debug.apk /tmp/mpi-arsa-release/MPI-ARSA.apk
-
+          mkdir -p /tmp/mpi-arsa-release
+          cp app/build/outputs/apk/release/app-release.apk /tmp/mpi-arsa-release/MPI-ARSA.apk
           (
             cd /tmp/mpi-arsa-release
             sha256sum MPI-ARSA.apk > MPI-ARSA.apk.sha256
           )
+          cat > /tmp/mpi-arsa-release/build-info.txt <<EOF
+          version=$VERSION
+          versionCode=$VERSION_CODE
+          sourceCommit=$HEAD_SHA
+          buildWorkflowRun=${{ github.event.workflow_run.id }}
+          artifact=MPI-ARSA.apk
+          EOF
 
-      - name: Sync README app metadata
-        env:
-          VERSION: ${{ steps.app.outputs.version }}
-          VERSION_CODE: ${{ steps.app.outputs.version_code }}
-          MIN_SDK: ${{ steps.app.outputs.min_sdk }}
-          TARGET_SDK: ${{ steps.app.outputs.target_sdk }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import os
-          import re
-          from pathlib import Path
-
-          path = Path("README.md")
-          text = path.read_text(encoding="utf-8")
-
-          version = os.environ["VERSION"]
-          version_code = os.environ["VERSION_CODE"]
-          min_sdk = os.environ["MIN_SDK"]
-          target_sdk = os.environ["TARGET_SDK"]
-
-          replacements = {
-              "APP_BADGE": (
-                  f"[![Android API](https://img.shields.io/badge/Android%20API-"
-                  f"{min_sdk}%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](#persyaratan)"
-              ),
-              "APP_REQUIREMENTS": (
-                  f"- Android **API {min_sdk}** atau lebih baru.\n"
-                  f"- Target SDK aplikasi: **{target_sdk}**."
-              ),
-              "APP_METADATA": (
-                  f"**v{version}** · `versionCode {version_code}` · "
-                  f"`minSdk {min_sdk}` · `targetSdk {target_sdk}`"
-              ),
-          }
-
-          for marker, content in replacements.items():
-              pattern = (
-                  rf"<!-- {marker}_START -->.*?<!-- {marker}_END -->"
-              )
-              replacement = (
-                  f"<!-- {marker}_START -->\n{content}\n<!-- {marker}_END -->"
-              )
-              text, count = re.subn(pattern, replacement, text, flags=re.S)
-              if count != 1:
-                  raise SystemExit(f"README marker {marker} not found exactly once")
-
-          path.write_text(text, encoding="utf-8")
-          PY
-
-      - name: Publish APK and README to repository
-        env:
-          VERSION: ${{ steps.app.outputs.version }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md dist/MPI-ARSA.apk "dist/MPI-ARSA-v${VERSION}.apk"
-
-          if git diff --cached --quiet; then
-            echo "Repository files already up to date"
-          else
-            git commit -m "chore: publish MPI ARSA v${VERSION} and sync README [skip ci]"
-            git push origin main
-          fi
-
-      - name: Publish GitHub Release
+      - name: Create immutable GitHub Release
+        if: steps.signing.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.app.outputs.tag }}
           VERSION: ${{ steps.app.outputs.version }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
         run: |
           set -euo pipefail
-
-          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --target main \
-              --title "MPI ARSA v${VERSION}" \
-              --notes "Android APK MPI ARSA v${VERSION}. Download MPI-ARSA.apk di bagian Assets untuk instalasi."
-          fi
-
-          gh release upload "$TAG" \
+          gh release create "$TAG" \
             /tmp/mpi-arsa-release/MPI-ARSA.apk \
             /tmp/mpi-arsa-release/MPI-ARSA.apk.sha256 \
+            /tmp/mpi-arsa-release/build-info.txt \
             --repo "$GITHUB_REPOSITORY" \
-            --clobber
+            --target "$HEAD_SHA" \
+            --title "MPI ARSA v${VERSION}" \
+            --notes "Production-signed Android APK MPI ARSA v${VERSION}. Source commit: ${HEAD_SHA}."
