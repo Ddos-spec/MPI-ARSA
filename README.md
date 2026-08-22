@@ -6,7 +6,9 @@
 
 [![Latest Release](https://img.shields.io/github/v/release/Ddos-spec/MPI-ARSA?style=flat-square&label=version)](https://github.com/Ddos-spec/MPI-ARSA/releases/latest)
 [![APK Build](https://img.shields.io/github/actions/workflow/status/Ddos-spec/MPI-ARSA/build-apk.yml?branch=main&style=flat-square&label=APK%20build)](https://github.com/Ddos-spec/MPI-ARSA/actions/workflows/build-apk.yml)
-[![Android](https://img.shields.io/badge/Android-5.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](#persyaratan)
+<!-- APP_BADGE_START -->
+[![Android API](https://img.shields.io/badge/Android%20API-21%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](#persyaratan)
+<!-- APP_BADGE_END -->
 
 ### [⬇️ DOWNLOAD APK TERBARU](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk)
 
@@ -27,7 +29,7 @@ MPI ARSA adalah aplikasi Android yang membungkus materi pembelajaran interaktif 
 | **[MPI-ARSA.apk](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk)** | APK versi terbaru — pilihan utama untuk pengguna |
 | [GitHub Releases](https://github.com/Ddos-spec/MPI-ARSA/releases) | Arsip seluruh rilis dan versi |
 | [MPI-ARSA.apk.sha256](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk.sha256) | Checksum SHA-256 untuk verifikasi file |
-| [Download langsung v1.0.5](https://github.com/Ddos-spec/MPI-ARSA/raw/refs/heads/main/dist/MPI-ARSA-v1.0.5.apk) | Fallback APK yang sudah tersedia di branch `main` |
+| [Download langsung dari branch main](https://github.com/Ddos-spec/MPI-ARSA/raw/refs/heads/main/dist/MPI-ARSA.apk) | Jalur APK stabil sebagai fallback |
 
 > **Untuk pengguna biasa:** cukup tekan **DOWNLOAD APK TERBARU** di bagian paling atas README ini.
 
@@ -42,7 +44,10 @@ Android dapat menampilkan peringatan keamanan untuk APK yang dipasang di luar Go
 
 ## Persyaratan
 
-- Android **5.0 (API 21)** atau lebih baru.
+<!-- APP_REQUIREMENTS_START -->
+- Android **API 21** atau lebih baru.
+- Target SDK aplikasi: **35**.
+<!-- APP_REQUIREMENTS_END -->
 - Android System WebView / Google Chrome aktif dan diperbarui.
 - Tampilan aplikasi menggunakan orientasi **landscape**.
 
@@ -60,9 +65,11 @@ Android dapat menampilkan peringatan keamanan untuk APK yang dipasang di luar Go
 
 ## Versi saat ini
 
-**v1.0.5** · `versionCode 6` · Target SDK **35**
+<!-- APP_METADATA_START -->
+**v1.0.5** · `versionCode 6` · `minSdk 21` · `targetSdk 35`
+<!-- APP_METADATA_END -->
 
-Versi aplikasi bersumber dari `app/build.gradle`. Workflow publikasi membaca versi tersebut secara otomatis saat membuat release, jadi link **Download APK Terbaru** tidak perlu diganti setiap kali versi naik.
+Data di atas tidak diedit manual. Workflow publikasi membaca `versionName`, `versionCode`, `minSdk`, dan `targetSdk` langsung dari `app/build.gradle`, kemudian memperbarui README setiap build sukses.
 
 ## Struktur repository
 
@@ -81,10 +88,11 @@ MPI-ARSA/
 Setiap perubahan pada branch `main` menjalankan pipeline build APK. Setelah build berhasil, pipeline publikasi akan:
 
 1. mengambil APK hasil build;
-2. membaca versi dari `app/build.gradle`;
-3. memperbarui APK di folder `dist/`;
-4. membuat atau memperbarui GitHub Release untuk versi tersebut;
-5. mengunggah `MPI-ARSA.apk` dan checksum SHA-256.
+2. membaca metadata aplikasi dari `app/build.gradle`;
+3. memperbarui informasi versi dan SDK di README;
+4. memperbarui APK di folder `dist/`;
+5. membuat atau memperbarui GitHub Release untuk versi tersebut;
+6. mengunggah `MPI-ARSA.apk` dan checksum SHA-256.
 
 Dengan pola ini, pengguna selalu bisa memakai URL berikut untuk mengambil APK terbaru:
 
