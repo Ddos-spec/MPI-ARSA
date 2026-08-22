@@ -146,35 +146,3 @@ jobs:
           fi
 
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY"
-
-      - name: Update stable repository APK
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          PATH_IN_REPO="dist/MPI-ARSA.apk"
-          API="repos/$GITHUB_REPOSITORY/contents/$PATH_IN_REPO"
-          CURRENT_SHA="$(gh api "$API" --jq '.sha' 2>/dev/null || true)"
-          base64 -w 0 /tmp/mpi-arsa-release/MPI-ARSA.apk > /tmp/mpi-arsa-apk.b64
-
-          if [ -n "$CURRENT_SHA" ]; then
-            jq -n \
-              --rawfile content /tmp/mpi-arsa-apk.b64 \
-              --arg message "chore: update stable client APK [skip ci]" \
-              --arg sha "$CURRENT_SHA" \
-              --arg branch "main" \
-              '{message:$message,content:$content,sha:$sha,branch:$branch}' \
-              > /tmp/update-apk.json
-          else
-            jq -n \
-              --rawfile content /tmp/mpi-arsa-apk.b64 \
-              --arg message "chore: publish stable client APK [skip ci]" \
-              --arg branch "main" \
-              '{message:$message,content:$content,branch:$branch}' \
-              > /tmp/update-apk.json
-          fi
-
-          gh api --method PUT "$API" --input /tmp/update-apk.json >/dev/null
-          echo "Stable APK updated: $PATH_IN_REPO"
