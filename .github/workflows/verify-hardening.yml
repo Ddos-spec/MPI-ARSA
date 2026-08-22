@@ -1,4 +1,4 @@
-# verification trigger: 2
+# verification trigger: 3
 name: Verify Hardening
 
 on:
@@ -46,7 +46,10 @@ jobs:
           set +e
           mkdir -p verification
           REPORT="verification/hardening-status.txt"
+          JAVA_LOG="/tmp/java-compile.log"
+          JAVA_ERROR="verification/java-compile-error.txt"
           : > "$REPORT"
+          rm -f "$JAVA_ERROR"
 
           VERSION="$(sed -n "s/^[[:space:]]*versionName[[:space:]]*'\([^']*\)'.*/\1/p" app/build.gradle | head -n 1)"
           VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -n 1)"
@@ -62,12 +65,13 @@ jobs:
             echo "javascript=fail" >> "$REPORT"
           fi
 
-          gradle :app:compileDebugJavaWithJavac --stacktrace
+          gradle :app:compileDebugJavaWithJavac --stacktrace >"$JAVA_LOG" 2>&1
           JAVA_STATUS=$?
           if [ "$JAVA_STATUS" -eq 0 ]; then
             echo "javaCompile=pass" >> "$REPORT"
           else
             echo "javaCompile=fail" >> "$REPORT"
+            tail -n 220 "$JAVA_LOG" > "$JAVA_ERROR"
           fi
 
           python3 - <<'PY'
@@ -121,7 +125,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add verification/hardening-status.txt
+          git add -A verification
           if git diff --cached --quiet; then
             echo "Verification report unchanged."
           else
