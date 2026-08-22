@@ -6,14 +6,13 @@
 
 [![Latest Release](https://img.shields.io/github/v/release/Ddos-spec/MPI-ARSA?style=flat-square&label=release)](https://github.com/Ddos-spec/MPI-ARSA/releases/latest)
 [![APK Build](https://img.shields.io/github/actions/workflow/status/Ddos-spec/MPI-ARSA/build-apk.yml?branch=main&style=flat-square&label=build)](https://github.com/Ddos-spec/MPI-ARSA/actions/workflows/build-apk.yml)
-[![Runtime Test](https://img.shields.io/github/actions/workflow/status/Ddos-spec/MPI-ARSA/runtime-smoke.yml?branch=main&style=flat-square&label=runtime%20test)](https://github.com/Ddos-spec/MPI-ARSA/actions/workflows/runtime-smoke.yml)
 <!-- APP_BADGE_START -->
 [![Android](https://img.shields.io/badge/Android-5.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](#persyaratan)
 <!-- APP_BADGE_END -->
 
 ### [⬇️ DOWNLOAD APK TERBARU](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk)
 
-[Semua versi](https://github.com/Ddos-spec/MPI-ARSA/releases) · [Build status](https://github.com/Ddos-spec/MPI-ARSA/actions) · [Laporkan masalah](https://github.com/Ddos-spec/MPI-ARSA/issues)
+[Semua versi](https://github.com/Ddos-spec/MPI-ARSA/releases) · [Build status](https://github.com/Ddos-spec/MPI-ARSA/actions/workflows/build-apk.yml) · [Laporkan masalah](https://github.com/Ddos-spec/MPI-ARSA/issues)
 
 </div>
 
@@ -70,23 +69,25 @@ Android dapat menampilkan peringatan karena APK dipasang dari luar Google Play.
 
 Metadata di atas disinkronkan otomatis dari `app/build.gradle`. Badge **Latest Release** menunjukkan APK publik terbaru.
 
-## Build, test, dan distribusi
+## Build & distribusi
 
-Flow dibuat sederhana:
+Flow dibuat sengaja sederhana untuk kebutuhan proyek ini:
 
-1. **Build APK** — membangun APK dan mengemas materi Storyline.
-2. **Runtime Smoke Test** — memasang APK pada emulator Android API 21, 29, dan 34; mengecek `CONTENT_READY`, crash, serta layar blank.
-3. **Publish APK** — APK yang lolos test dipublikasikan otomatis ke GitHub Releases.
+1. workflow mengambil materi Storyline dari APK baseline yang sudah terbukti lengkap di repository;
+2. patch Storyline dan source Android terbaru diterapkan;
+3. Gradle membangun APK;
+4. workflow memeriksa file APK dan entry point materi;
+5. APK langsung diunggah ke **GitHub Releases** sebagai `MPI-ARSA.apk`.
 
-Dengan pola ini, update project tetap gampang tetapi APK yang gagal render tidak langsung dilempar ke pengguna.
+Build tidak lagi mengunduh ratusan asset Storyline satu per satu dari Google Drive, sehingga lebih sedikit titik gagal yang tidak berhubungan dengan source aplikasi.
 
 ## Struktur repository
 
 ```text
 MPI-ARSA/
 ├── app/                    # Android application source
-├── dist/                   # Arsip APK lama
-├── .github/workflows/      # Build, runtime test, publish, dan metadata README
+├── dist/                   # APK baseline / arsip lama
+├── .github/workflows/      # Build/release dan metadata README
 ├── build.gradle
 ├── settings.gradle
 └── README.md
@@ -104,6 +105,6 @@ URL ini tetap sama meskipun versi aplikasi berubah.
 
 <div align="center">
 
-**MPI ARSA Android** · Source, build, test, dan distribusi dikelola melalui GitHub.
+**MPI ARSA Android** · Source, build, dan distribusi dikelola melalui GitHub.
 
 </div>
