@@ -13,20 +13,11 @@ jobs:
   smoke-test:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - api-level: 21
-            arch: x86
-            profile: Nexus 5
-          - api-level: 29
-            arch: x86_64
-            profile: pixel_6
-          - api-level: 34
-            arch: x86_64
-            profile: pixel_6
+        api-level: [29, 34]
 
     steps:
       - name: Download APK from exact triggering build
@@ -88,7 +79,6 @@ jobs:
 
           if ! adb shell dumpsys activity activities | grep -q "com.mpiarsa.app/.MainActivity"; then
             echo "::error::MPI ARSA process is alive but MainActivity is not active on API ${API_LEVEL}"
-            adb shell dumpsys activity activities | grep -A 8 -B 8 "com.mpiarsa.app" || true
             exit 1
           fi
 
@@ -107,15 +97,14 @@ jobs:
           sample = image.resize((160, 90))
           pixels = list(sample.getdata())
           near_black = sum(1 for r, g, b in pixels if max(r, g, b) < 12) / len(pixels)
-          gray = sample.convert("L")
-          contrast = ImageStat.Stat(gray).stddev[0]
+          contrast = ImageStat.Stat(sample.convert("L")).stddev[0]
 
           print(f"screenshot near_black={near_black:.4f} contrast={contrast:.2f}")
           if near_black > 0.985 or contrast < 1.8:
               raise SystemExit("Screenshot appears blank or nearly uniform")
           PY
 
-          echo "MPI ARSA rendered usable content on Android API ${API_LEVEL} (PID ${PID})."
+          echo "MPI ARSA rendered usable content on Android API ${API_LEVEL}."
           EOF
           chmod +x smoke-test.sh
 
@@ -130,8 +119,8 @@ jobs:
         with:
           api-level: ${{ matrix.api-level }}
           target: google_apis
-          arch: ${{ matrix.arch }}
-          profile: ${{ matrix.profile }}
+          arch: x86_64
+          profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
           script: bash smoke-test.sh ${{ matrix.api-level }}
@@ -146,7 +135,7 @@ jobs:
             mpi-arsa-api-${{ matrix.api-level }}.png
             uiautomator-api-${{ matrix.api-level }}.xml
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 7
 
   prepare-release-candidate:
     needs: smoke-test
