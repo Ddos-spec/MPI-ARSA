@@ -1,0 +1,9 @@
+version=1.0.7
+versionCode=8
+sourceCommit=14ec06d5b4e64938f29e042fef24565995f10536
+javascript=pass
+javaCompile=fail
+manifest=pass
+invalidReleaseV1.0.6=absent
+releaseSigningSecrets=missing
+overall=fail
