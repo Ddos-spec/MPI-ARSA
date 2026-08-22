@@ -27,12 +27,12 @@ MPI ARSA adalah aplikasi Android untuk menjalankan materi pembelajaran interakti
 
 | File | Kegunaan |
 | --- | --- |
-| **[MPI-ARSA.apk](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk)** | APK rilis terbaru yang tersedia |
-| [GitHub Releases](https://github.com/Ddos-spec/MPI-ARSA/releases) | Arsip versi resmi dan legacy |
-| [MPI-ARSA.apk.sha256](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk.sha256) | Checksum SHA-256 jika tersedia pada rilis tersebut |
-| [build-info.txt](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/build-info.txt) | Metadata source/build untuk rilis pipeline baru |
+| **[MPI-ARSA.apk](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk)** | APK terbaru untuk instalasi |
+| [GitHub Releases](https://github.com/Ddos-spec/MPI-ARSA/releases) | Arsip versi aplikasi |
+| [MPI-ARSA.apk.sha256](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk.sha256) | Checksum SHA-256 APK |
+| [build-info.txt](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/build-info.txt) | Informasi versi dan source build |
 
-> **Kebijakan rilis baru:** mulai pipeline `v1.0.7+`, build debug hanya untuk pengujian. Rilis baru hanya boleh diterbitkan sebagai APK release yang sudah ditandatangani dan diverifikasi. Rilis lama dapat mendahului kebijakan ini.
+> APK ini didistribusikan langsung melalui GitHub untuk kebutuhan proyek/klien, bukan melalui Google Play.
 
 ## Cara instal
 
@@ -41,7 +41,7 @@ MPI ARSA adalah aplikasi Android untuk menjalankan materi pembelajaran interakti
 3. Jika Android meminta izin, aktifkan **Install unknown apps** untuk aplikasi/browser yang digunakan mengunduh APK.
 4. Pilih **Install**, lalu buka **MPI ARSA**.
 
-Pastikan APK berasal dari halaman **Releases** repository `Ddos-spec/MPI-ARSA` ini.
+Android dapat menampilkan peringatan karena APK dipasang dari luar Google Play.
 
 ## Persyaratan
 
@@ -55,12 +55,12 @@ Pastikan APK berasal dari halaman **Releases** repository `Ddos-spec/MPI-ARSA` i
 ## Pengalaman aplikasi
 
 - Full-screen immersive Android experience.
-- Loading state dan timeout yang jelas saat materi dimuat.
+- Loading state dan timeout saat materi dimuat.
 - Tombol **Coba Lagi** jika WebView gagal atau renderer berhenti.
 - Double-back untuk mencegah aplikasi tertutup karena salah tekan.
 - Download HTTP/HTTPS menggunakan Android Download Manager.
 - Asset lokal aplikasi dapat disimpan ke folder Downloads.
-- Pilihan quiz yang sedang aktif diberi feedback visual lebih jelas.
+- Pilihan quiz aktif diberi feedback visual lebih jelas.
 
 ## Versi source saat ini
 
@@ -68,36 +68,25 @@ Pastikan APK berasal dari halaman **Releases** repository `Ddos-spec/MPI-ARSA` i
 **v1.0.7** · `versionCode 8` · `minSdk 21` · `targetSdk 35`
 <!-- APP_METADATA_END -->
 
-Metadata di atas disinkronkan otomatis dari `app/build.gradle` ketika konfigurasi versi berubah. Badge **Latest Release** berasal langsung dari GitHub Releases sehingga menunjukkan rilis publik terbaru, sedangkan bagian **Versi source saat ini** menunjukkan kandidat source terbaru yang belum tentu sudah diterbitkan.
+Metadata di atas disinkronkan otomatis dari `app/build.gradle`. Badge **Latest Release** menunjukkan APK publik terbaru.
 
 ## Build, test, dan distribusi
 
-Pipeline dibagi berdasarkan tanggung jawab:
+Flow dibuat sederhana:
 
-1. **Build APK** — membangun APK debug khusus pengujian dan mengemas materi Storyline.
-2. **Runtime Smoke Test** — memasang APK pada emulator Android, menunggu sinyal `CONTENT_READY`, memeriksa crash, dan menolak layar yang blank/hampir seragam.
-3. **Publish Signed APK** — hanya berjalan untuk source yang masih relevan, membangun ulang APK release dari aset yang sudah diuji, memverifikasi signature serta flag debug, lalu membuat GitHub Release yang immutable.
+1. **Build APK** — membangun APK dan mengemas materi Storyline.
+2. **Runtime Smoke Test** — memasang APK pada emulator Android API 21, 29, dan 34; mengecek `CONTENT_READY`, crash, serta layar blank.
+3. **Publish APK** — APK yang lolos test dipublikasikan otomatis ke GitHub Releases.
 
-Satu `versionName` hanya boleh menghasilkan satu rilis. Jika binary berubah, versi harus dinaikkan; workflow tidak lagi menimpa asset pada tag versi lama.
-
-### Release signing
-
-Rilis production membutuhkan GitHub Actions secrets berikut:
-
-- `ANDROID_KEYSTORE_BASE64`
-- `ANDROID_KEYSTORE_PASSWORD`
-- `ANDROID_KEY_ALIAS`
-- `ANDROID_KEY_PASSWORD`
-
-Jika signing belum tersedia, build debug dan runtime test tetap berjalan tetapi **tidak ada debug APK yang dipromosikan menjadi production release**.
+Dengan pola ini, update project tetap gampang tetapi APK yang gagal render tidak langsung dilempar ke pengguna.
 
 ## Struktur repository
 
 ```text
 MPI-ARSA/
 ├── app/                    # Android application source
-├── dist/                   # Arsip APK lama; bukan jalur production terbaru
-├── .github/workflows/      # Build, test, publish, dan maintenance
+├── dist/                   # Arsip APK lama
+├── .github/workflows/      # Build, runtime test, publish, dan metadata README
 ├── build.gradle
 ├── settings.gradle
 └── README.md
@@ -109,7 +98,7 @@ MPI-ARSA/
 https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk
 ```
 
-URL tersebut tidak mengandung nomor versi. Setelah rilis production baru diterbitkan, link yang sama otomatis mengarah ke APK terbaru.
+URL ini tetap sama meskipun versi aplikasi berubah.
 
 ---
 
