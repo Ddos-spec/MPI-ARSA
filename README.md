@@ -27,7 +27,7 @@ MPI ARSA adalah aplikasi Android yang membungkus materi pembelajaran interaktif 
 | **[MPI-ARSA.apk](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk)** | APK versi terbaru — pilihan utama untuk pengguna |
 | [GitHub Releases](https://github.com/Ddos-spec/MPI-ARSA/releases) | Arsip seluruh rilis dan versi |
 | [MPI-ARSA.apk.sha256](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk.sha256) | Checksum SHA-256 untuk verifikasi file |
-| [dist/MPI-ARSA.apk](https://github.com/Ddos-spec/MPI-ARSA/raw/refs/heads/main/dist/MPI-ARSA.apk) | Jalur download stabil langsung dari branch `main` |
+| [Download langsung v1.0.5](https://github.com/Ddos-spec/MPI-ARSA/raw/refs/heads/main/dist/MPI-ARSA-v1.0.5.apk) | Fallback APK yang sudah tersedia di branch `main` |
 
 > **Untuk pengguna biasa:** cukup tekan **DOWNLOAD APK TERBARU** di bagian paling atas README ini.
 
@@ -55,7 +55,7 @@ Android dapat menampilkan peringatan keamanan untuk APK yang dipasang di luar Go
 - Link eksternal dibuka melalui aplikasi Android yang sesuai.
 - Build APK otomatis menggunakan GitHub Actions.
 - APK terbaru otomatis dipublikasikan ke **GitHub Releases**.
-- Stable download asset: `MPI-ARSA.apk`.
+- Stable release asset: `MPI-ARSA.apk`.
 - SHA-256 checksum dipublikasikan bersama setiap release.
 
 ## Versi saat ini
