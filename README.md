@@ -27,12 +27,12 @@ MPI ARSA adalah aplikasi Android untuk menjalankan materi pembelajaran interakti
 
 | File | Kegunaan |
 | --- | --- |
-| **[MPI-ARSA.apk](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk)** | APK production-signed terbaru — pilihan utama untuk pengguna |
-| [GitHub Releases](https://github.com/Ddos-spec/MPI-ARSA/releases) | Arsip versi resmi |
-| [MPI-ARSA.apk.sha256](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk.sha256) | Checksum SHA-256 untuk verifikasi APK |
-| [build-info.txt](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/build-info.txt) | Versi, source commit, dan build run APK |
+| **[MPI-ARSA.apk](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk)** | APK rilis terbaru yang tersedia |
+| [GitHub Releases](https://github.com/Ddos-spec/MPI-ARSA/releases) | Arsip versi resmi dan legacy |
+| [MPI-ARSA.apk.sha256](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk.sha256) | Checksum SHA-256 jika tersedia pada rilis tersebut |
+| [build-info.txt](https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/build-info.txt) | Metadata source/build untuk rilis pipeline baru |
 
-> **Untuk pengguna biasa:** tekan **DOWNLOAD APK TERBARU** di bagian paling atas. Build debug dari GitHub Actions hanya digunakan untuk pengujian dan tidak dipublikasikan sebagai rilis production.
+> **Kebijakan rilis baru:** mulai pipeline `v1.0.7+`, build debug hanya untuk pengujian. Rilis baru hanya boleh diterbitkan sebagai APK release yang sudah ditandatangani dan diverifikasi. Rilis lama dapat mendahului kebijakan ini.
 
 ## Cara instal
 
@@ -68,7 +68,7 @@ Pastikan APK berasal dari halaman **Releases** repository `Ddos-spec/MPI-ARSA` i
 **v1.0.7** · `versionCode 8` · `minSdk 21` · `targetSdk 35`
 <!-- APP_METADATA_END -->
 
-Metadata di atas disinkronkan otomatis dari `app/build.gradle` ketika konfigurasi versi berubah. Badge **Latest Release** berasal langsung dari GitHub Releases sehingga selalu menunjukkan rilis resmi terbaru.
+Metadata di atas disinkronkan otomatis dari `app/build.gradle` ketika konfigurasi versi berubah. Badge **Latest Release** berasal langsung dari GitHub Releases sehingga menunjukkan rilis publik terbaru, sedangkan bagian **Versi source saat ini** menunjukkan kandidat source terbaru yang belum tentu sudah diterbitkan.
 
 ## Build, test, dan distribusi
 
@@ -109,7 +109,7 @@ MPI-ARSA/
 https://github.com/Ddos-spec/MPI-ARSA/releases/latest/download/MPI-ARSA.apk
 ```
 
-URL tersebut tidak mengandung nomor versi. Begitu rilis production baru diterbitkan, link yang sama otomatis mengarah ke APK terbaru.
+URL tersebut tidak mengandung nomor versi. Setelah rilis production baru diterbitkan, link yang sama otomatis mengarah ke APK terbaru.
 
 ---
 
