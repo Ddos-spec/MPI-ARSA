@@ -192,7 +192,6 @@ public class MainActivity extends Activity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setDefaultTextEncodingName("UTF-8");
 
-        // Storyline is served through a local HTTPS origin. Keep raw filesystem access closed.
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setAllowFileAccessFromFileURLs(false);
@@ -205,87 +204,14 @@ public class MainActivity extends Activity {
         webView.addJavascriptInterface(new NativeBridge(), "MPIARSA");
         webView.setWebChromeClient(new WebChromeClient());
         webView.setDownloadListener(this::requestDownload);
-        webView.setWebViewClient(new WebViewClientCompat() {
-            @Override
-            public WebResourceResponse shouldInterceptRequest(
-                    WebView view,
-                    WebResourceRequest request
-            ) {
-                return assetLoader.shouldInterceptRequest(request.getUrl());
-            }
 
-            @Override
-            @SuppressWarnings("deprecation")
-            public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
-                return assetLoader.shouldInterceptRequest(Uri.parse(url));
-            }
-
-            @Override
-            public boolean shouldOverrideUrlLoading(
-                    WebView view,
-                    WebResourceRequest request
-            ) {
-                return handleNavigation(request.getUrl());
-            }
-
-            @Override
-            @SuppressWarnings("deprecation")
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return handleNavigation(Uri.parse(url));
-            }
-
-            @Override
-            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                super.onPageStarted(view, url, favicon);
-                contentReady = false;
-                showLoading("Memuat materi…");
-                scheduleLoadTimeout();
-            }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                injectEnhancements(view);
-            }
-
-            @Override
-            public void onReceivedError(
-                    WebView view,
-                    WebResourceRequest request,
-                    WebResourceError error
-            ) {
-                super.onReceivedError(view, request, error);
-                if (request.isForMainFrame()) {
-                    Log.e(TAG, "Main frame load failed: " + error);
-                    showError("Materi gagal dimuat. Tekan COBA LAGI untuk memuat ulang.", true);
-                }
-            }
-
-            @Override
-            public void onReceivedHttpError(
-                    WebView view,
-                    WebResourceRequest request,
-                    WebResourceResponse errorResponse
-            ) {
-                super.onReceivedHttpError(view, request, errorResponse);
-                if (request.isForMainFrame()) {
-                    Log.e(TAG, "Main frame HTTP error: " + errorResponse.getStatusCode());
-                    showError("Materi tidak tersedia dengan benar. Tekan COBA LAGI.", true);
-                }
-            }
-
-            @Override
-            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
-                Log.e(
-                        TAG,
-                        "WebView renderer gone. crashed=" + detail.didCrash()
-                                + " priority=" + detail.rendererPriorityAtExit()
-                );
-                destroyWebView();
-                showError("Mesin tampilan berhenti. Tekan COBA LAGI untuk memulihkan aplikasi.", true);
-                return true;
-            }
-        });
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            webView.setWebViewClient(new StorylineClientApi26(assetLoader));
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            webView.setWebViewClient(new StorylineClientApi23(assetLoader));
+        } else {
+            webView.setWebViewClient(new StorylineClient(assetLoader));
+        }
 
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
             webView.loadUrl(START_URL);
@@ -460,7 +386,7 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             try (InputStream input = getAssets().open(assetPath)) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    saveToMediaStore(input, fileName, mimeType);
+                    Api29Downloads.save(MainActivity.this, input, fileName, mimeType);
                 } else {
                     saveToLegacyDownloads(input, fileName);
                 }
@@ -470,41 +396,6 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> toast("File gagal disimpan."));
             }
         }).start();
-    }
-
-    @SuppressLint("NewApi")
-    private void saveToMediaStore(InputStream input, String fileName, String mimeType)
-            throws IOException {
-        ContentValues values = new ContentValues();
-        values.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
-        if (mimeType != null && !mimeType.trim().isEmpty()) {
-            values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
-        }
-        values.put(
-                MediaStore.MediaColumns.RELATIVE_PATH,
-                Environment.DIRECTORY_DOWNLOADS + File.separator + "MPI ARSA"
-        );
-        values.put(MediaStore.MediaColumns.IS_PENDING, 1);
-
-        Uri destination = getContentResolver().insert(
-                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                values
-        );
-        if (destination == null) {
-            throw new IOException("Unable to create MediaStore destination");
-        }
-
-        try (OutputStream output = getContentResolver().openOutputStream(destination)) {
-            if (output == null) throw new IOException("Unable to open MediaStore output");
-            copy(input, output);
-        } catch (IOException error) {
-            getContentResolver().delete(destination, null, null);
-            throw error;
-        }
-
-        values.clear();
-        values.put(MediaStore.MediaColumns.IS_PENDING, 0);
-        getContentResolver().update(destination, values, null, null);
     }
 
     @SuppressWarnings("deprecation")
@@ -535,7 +426,7 @@ public class MainActivity extends Activity {
         return candidate;
     }
 
-    private void copy(InputStream input, OutputStream output) throws IOException {
+    private static void copy(InputStream input, OutputStream output) throws IOException {
         byte[] buffer = new byte[16 * 1024];
         int read;
         while ((read = input.read(buffer)) != -1) {
@@ -716,6 +607,145 @@ public class MainActivity extends Activity {
                 }
                 hideStatus();
             });
+        }
+    }
+
+    private class StorylineClient extends WebViewClientCompat {
+        final WebViewAssetLoader assetLoader;
+
+        StorylineClient(WebViewAssetLoader assetLoader) {
+            this.assetLoader = assetLoader;
+        }
+
+        @Override
+        public WebResourceResponse shouldInterceptRequest(
+                WebView view,
+                WebResourceRequest request
+        ) {
+            return assetLoader.shouldInterceptRequest(request.getUrl());
+        }
+
+        @Override
+        @SuppressWarnings("deprecation")
+        public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+            return assetLoader.shouldInterceptRequest(Uri.parse(url));
+        }
+
+        @Override
+        public boolean shouldOverrideUrlLoading(
+                WebView view,
+                WebResourceRequest request
+        ) {
+            return handleNavigation(request.getUrl());
+        }
+
+        @Override
+        @SuppressWarnings("deprecation")
+        public boolean shouldOverrideUrlLoading(WebView view, String url) {
+            return handleNavigation(Uri.parse(url));
+        }
+
+        @Override
+        public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+            super.onPageStarted(view, url, favicon);
+            contentReady = false;
+            showLoading("Memuat materi…");
+            scheduleLoadTimeout();
+        }
+
+        @Override
+        public void onPageFinished(WebView view, String url) {
+            super.onPageFinished(view, url);
+            injectEnhancements(view);
+        }
+    }
+
+    private class StorylineClientApi23 extends StorylineClient {
+        StorylineClientApi23(WebViewAssetLoader assetLoader) {
+            super(assetLoader);
+        }
+
+        @Override
+        public void onReceivedError(
+                WebView view,
+                WebResourceRequest request,
+                WebResourceError error
+        ) {
+            super.onReceivedError(view, request, error);
+            if (request.isForMainFrame()) {
+                Log.e(TAG, "Main frame load failed: " + error);
+                showError("Materi gagal dimuat. Tekan COBA LAGI untuk memuat ulang.", true);
+            }
+        }
+
+        @Override
+        public void onReceivedHttpError(
+                WebView view,
+                WebResourceRequest request,
+                WebResourceResponse errorResponse
+        ) {
+            super.onReceivedHttpError(view, request, errorResponse);
+            if (request.isForMainFrame()) {
+                Log.e(TAG, "Main frame HTTP error: " + errorResponse.getStatusCode());
+                showError("Materi tidak tersedia dengan benar. Tekan COBA LAGI.", true);
+            }
+        }
+    }
+
+    private final class StorylineClientApi26 extends StorylineClientApi23 {
+        StorylineClientApi26(WebViewAssetLoader assetLoader) {
+            super(assetLoader);
+        }
+
+        @Override
+        public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+            Log.e(
+                    TAG,
+                    "WebView renderer gone. crashed=" + detail.didCrash()
+                            + " priority=" + detail.rendererPriorityAtExit()
+            );
+            destroyWebView();
+            showError("Mesin tampilan berhenti. Tekan COBA LAGI untuk memulihkan aplikasi.", true);
+            return true;
+        }
+    }
+
+    private static final class Api29Downloads {
+        private Api29Downloads() {}
+
+        @SuppressLint("NewApi")
+        static void save(Activity activity, InputStream input, String fileName, String mimeType)
+                throws IOException {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
+            if (mimeType != null && !mimeType.trim().isEmpty()) {
+                values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
+            }
+            values.put(
+                    MediaStore.MediaColumns.RELATIVE_PATH,
+                    Environment.DIRECTORY_DOWNLOADS + File.separator + "MPI ARSA"
+            );
+            values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+
+            Uri destination = activity.getContentResolver().insert(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    values
+            );
+            if (destination == null) {
+                throw new IOException("Unable to create MediaStore destination");
+            }
+
+            try (OutputStream output = activity.getContentResolver().openOutputStream(destination)) {
+                if (output == null) throw new IOException("Unable to open MediaStore output");
+                copy(input, output);
+            } catch (IOException error) {
+                activity.getContentResolver().delete(destination, null, null);
+                throw error;
+            }
+
+            values.clear();
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0);
+            activity.getContentResolver().update(destination, values, null, null);
         }
     }
 }
