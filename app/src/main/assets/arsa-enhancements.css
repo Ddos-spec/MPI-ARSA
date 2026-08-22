@@ -1,12 +1,12 @@
 :root {
   --arsa-accent: #08789a;
-  --arsa-accent-soft: rgba(8, 120, 154, 0.18);
+  --arsa-accent-soft: rgba(8, 120, 154, 0.2);
   --arsa-success: #16a34a;
-  --arsa-success-soft: rgba(22, 163, 74, 0.18);
+  --arsa-success-soft: rgba(22, 163, 74, 0.2);
 }
 
 [role="radio"].arsa-choice {
-  outline: 3px solid transparent !important;
+  outline: 3px solid rgba(8, 120, 154, 0.2) !important;
   outline-offset: 2px !important;
   border-radius: 12px !important;
   box-shadow: 0 0 0 0 transparent !important;
@@ -16,37 +16,48 @@
   transition:
     outline-color 100ms ease,
     box-shadow 100ms ease,
-    opacity 70ms ease !important;
+    opacity 70ms ease,
+    transform 70ms ease !important;
 }
 
 [role="radio"].arsa-choice:hover,
 [role="radio"].arsa-choice:focus-visible {
-  outline-color: rgba(8, 120, 154, 0.65) !important;
+  outline-color: rgba(8, 120, 154, 0.72) !important;
 }
 
 [role="radio"].arsa-choice.arsa-choice-selected,
 [role="radio"].arsa-choice[aria-checked="true"],
 [role="radio"].arsa-choice[aria-selected="true"] {
   outline-color: var(--arsa-accent) !important;
-  box-shadow: 0 0 0 5px var(--arsa-accent-soft) !important;
+  box-shadow: 0 0 0 6px var(--arsa-accent-soft) !important;
 }
 
 [role="radio"].arsa-choice.arsa-choice-pressed {
-  opacity: 0.82 !important;
+  opacity: 0.86 !important;
+  transform: scale(0.992) !important;
 }
 
 .arsa-submit {
-  outline: 2px solid rgba(8, 120, 154, 0.55) !important;
+  outline: 2px solid rgba(8, 120, 154, 0.42) !important;
   outline-offset: 3px !important;
   border-radius: 10px !important;
   touch-action: manipulation !important;
   -webkit-tap-highlight-color: rgba(8, 120, 154, 0.18) !important;
-  transition: outline-color 120ms ease, box-shadow 120ms ease !important;
+  transition:
+    outline-color 120ms ease,
+    box-shadow 120ms ease,
+    filter 120ms ease !important;
 }
 
-.arsa-submit.arsa-submit-ready {
+.arsa-submit[data-arsa-ready="false"] {
+  filter: saturate(0.72) brightness(0.92) !important;
+}
+
+.arsa-submit.arsa-submit-ready,
+.arsa-submit[data-arsa-ready="true"] {
   outline-color: var(--arsa-success) !important;
-  box-shadow: 0 0 0 5px var(--arsa-success-soft) !important;
+  box-shadow: 0 0 0 6px var(--arsa-success-soft) !important;
+  filter: none !important;
 }
 
 #arsa-choice-hint {
@@ -54,8 +65,8 @@
   z-index: 2147483647;
   left: 50%;
   bottom: max(18px, env(safe-area-inset-bottom));
-  transform: translate(-50%, 12px);
-  max-width: min(82vw, 620px);
+  transform: translate(-50%, 10px);
+  max-width: min(86vw, 620px);
   padding: 10px 16px;
   border-radius: 999px;
   background: rgba(12, 18, 24, 0.94);
